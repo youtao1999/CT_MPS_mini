@@ -1,0 +1,10 @@
+*.sif
+*.so
+*.out
+*.err
+*.json
+*.csv
+*.txt
+*.log
+*.log.*
+*.log.*.*
