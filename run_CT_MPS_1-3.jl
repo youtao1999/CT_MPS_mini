@@ -26,10 +26,10 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
         EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2))
-        return Dict("O" => O, "EE" => EE, "max_bond" => max_bond)
+        return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     else
         SA=CT.von_Neumann_entropy(ct_f.mps,1)
-        return Dict("O" => O, "SA" => SA, "max_bond" => max_bond)
+        return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     end
 end
 
@@ -102,24 +102,13 @@ function main()
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
-    #initialize p_ctrl and p_proj
-    p_ctrl = 0.0
-    p_proj = 0.0
-    p_scan = ""
-    if p_fixed_name == "p_ctrl"
-        p_ctrl = p_fixed_value
-        p_scan = "p_proj"
-    else
-        p_proj = p_fixed_value
-        p_scan = "p_ctrl"
-    end
+    
     #scan over p_range
     for p in p_range
-        if p_fixed_name == "p_ctrl"
-            p_ctrl = p
-        else
-            p_proj = p
-        end
+        # Initialize parameters for this iteration
+        p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
+        p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
+        
         for i in 1:args["n_chunk_realizations"]
             if args["random"]
                 seed = rand(1:10000)
@@ -127,7 +116,7 @@ function main()
                 seed = 0
             end
             results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],seed)
-            filename = "/scratch/ty296/json_data/$(args["job_id"])_$(p_scan)$(Printf.@sprintf("%.3f", p))_s$(seed)_a$(args["ancilla"]).json"
+            filename = "/scratch/ty296/json_data/$(args["job_id"])_s$(seed)_a$(args["ancilla"]).json"
             data_to_serialize = merge(results, Dict("args" => args))
             json_data = JSON.json(data_to_serialize)
             open(filename, "w") do f
