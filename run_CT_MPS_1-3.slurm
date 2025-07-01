@@ -3,8 +3,8 @@
 #SBATCH --ntasks=6                # Number of tasks (processes)
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
 #SBATCH --time=01:00:00            # Time limit hrs:min:sec
-#SBATCH --output=%j.out            # Standard output log
-#SBATCH --error=%j.err             # Standard error log
+#SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
+#SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
 #SBATCH --partition=main
 
 

@@ -103,27 +103,34 @@ function main()
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
     
-    #scan over p_range
-    for p in p_range
-        # Initialize parameters for this iteration
-        p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
-        p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
-        
-        for i in 1:args["n_chunk_realizations"]
-            if args["random"]
-                seed = rand(1:10000)
-            else
-                seed = 0
-            end
-            results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],seed)
-            filename = "/scratch/ty296/json_data/$(args["job_id"])_s$(seed)_a$(args["ancilla"]).json"
-            data_to_serialize = merge(results, Dict("args" => args))
-            json_data = JSON.json(data_to_serialize)
-            open(filename, "w") do f
-                write(f, json_data)
+    # Open file once for writing all results
+    filename = "/scratch/ty296/json_data/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
+    result_count = 0
+    
+    open(filename, "w") do f
+        #scan over p_range
+        for p in p_range
+            # Initialize parameters for this iteration
+            p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
+            p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
+            
+            for i in 1:args["n_chunk_realizations"]
+                if args["random"]
+                    seed = rand(1:10000)
+                else
+                    seed = 0
+                end
+                results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],seed)
+                data_to_serialize = merge(results, Dict("args" => args))
+                
+                # Write each result as a separate line (JSON Lines format)
+                println(f, JSON.json(data_to_serialize))
+                result_count += 1
             end
         end
     end
+    
+    println("Saved $result_count results to $filename")
 end
 
 if isdefined(Main, :PROGRAM_FILE) && abspath(PROGRAM_FILE) == @__FILE__
