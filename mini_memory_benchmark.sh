@@ -246,12 +246,47 @@ if [ "$DIRECT_RUN" = true ]; then
     echo "Running computation directly..."
     run_computation
 else
-    echo "Requesting interactive session and running computation..."
-    # Export variables and function for the srun environment
-    export P_FIXED_NAME P_FIXED_VALUE P_RANGE L ANCILLA N_CHUNK_REALIZATIONS MAXDIM OUTPUT_DIR REQUEST_TIME
-    export -f run_computation
+    echo "Submitting batch job and running computation..."
+    # Create a temporary script file to avoid quoting issues with --wrap
+    TEMP_SCRIPT="/tmp/run_memory_benchmark_$$.sh"
     
-    srun --nodes=1 --ntasks-per-node=1 --mem=$REQUEST_MEMORY --time=$REQUEST_TIME bash -c "$(declare -f run_computation); run_computation"
+    cat > "$TEMP_SCRIPT" << 'EOF'
+#!/bin/bash
+# Auto-generated temporary script for memory benchmark
+
+# Re-declare variables (they get passed via environment)
+EOF
+    
+    # Add variable declarations to the temp script
+    cat >> "$TEMP_SCRIPT" << EOF
+P_FIXED_NAME="$P_FIXED_NAME"
+P_FIXED_VALUE="$P_FIXED_VALUE"
+P_RANGE="$P_RANGE"
+L="$L"
+ANCILLA="$ANCILLA"
+N_CHUNK_REALIZATIONS="$N_CHUNK_REALIZATIONS"
+MAXDIM="$MAXDIM"
+OUTPUT_DIR="$OUTPUT_DIR"
+REQUEST_TIME="$REQUEST_TIME"
+
+EOF
+    
+    # Add the function definition to the temp script
+    declare -f run_computation >> "$TEMP_SCRIPT"
+    
+    # Add the function call
+    echo "run_computation" >> "$TEMP_SCRIPT"
+    
+    # Make the script executable
+    chmod +x "$TEMP_SCRIPT"
+    
+    # Submit the batch job
+    sbatch --nodes=1 --ntasks-per-node=1 --mem=$REQUEST_MEMORY --time=$REQUEST_TIME \
+           --output="$OUTPUT_DIR/slurm_%j.out" --error="$OUTPUT_DIR/slurm_%j.err" \
+           "$TEMP_SCRIPT"
+    
+    # Clean up the temporary script after a delay (in case sbatch needs to read it)
+    (sleep 10; rm -f "$TEMP_SCRIPT") &
 fi
 
 echo "Session completed" 
