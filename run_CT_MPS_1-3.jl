@@ -12,9 +12,9 @@ using Printf
 using ArgParse
 using Serialization
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,seed::Int)
+function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int)
 
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff)
     i=1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
 
@@ -83,6 +83,10 @@ function parse_my_args()
         arg_type = Int
         default = 10
         help = "set the maximal bond dim"
+        "--cutoff", "-c"
+        arg_type = Float64
+        default = 1e-10
+        help = "set the cutoff"
         "--n_chunk_realizations", "-n"
         arg_type = Int
         default = 1
@@ -104,7 +108,7 @@ function main()
     p_fixed_value = args["p_fixed_value"]
     
     # Open file once for writing all results
-    filename = "/scratch/ty296/json_data/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
+    filename = "/scratch/ty296/json_data/$p_fixed_name$p_fixed_value/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
     result_count = 0
     
     open(filename, "w") do f
@@ -120,7 +124,7 @@ function main()
                 else
                     seed = 0
                 end
-                results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],seed)
+                results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed)
                 data_to_serialize = merge(results, Dict("args" => args))
                 
                 # Write each result as a separate line (JSON Lines format)

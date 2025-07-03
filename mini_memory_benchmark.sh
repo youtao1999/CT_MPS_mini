@@ -50,6 +50,10 @@ while [[ $# -gt 0 ]]; do
             MAXDIM="$2"
             shift 2
             ;;
+        --cutoff)
+            CUTOFF="$2"
+            shift 2
+            ;;
         --output-dir)
             OUTPUT_DIR="$2"
             shift 2
@@ -80,18 +84,23 @@ done
 
 # Set default values if not provided via command line
 : ${L:="10"}
-: ${P_RANGE:="0.0:1.0:10"}
+: ${P_RANGE:="0.5"}
 : ${P_FIXED_NAME:="p_ctrl"}
 : ${P_FIXED_VALUE:="0.5"}
 : ${ANCILLA:="0"}
 : ${N_CHUNK_REALIZATIONS:="20"}
-: ${MAXDIM:="100"}
+: ${MAXDIM:="9223372036854775807"}
+: ${CUTOFF:="1e-10"}
 : ${REQUEST_MEMORY:="40G"}
 : ${REQUEST_TIME:="01:00:00"}
 
 # Set output directory if not provided
 if [ -z "$OUTPUT_DIR" ]; then
-    OUTPUT_DIR="/scratch/ty296/memory_benchmark_results/L${L}_maxdim${MAXDIM}_ancilla${ANCILLA}"
+    if [ "$MAXDIM" -eq "9223372036854775807" ]; then
+        OUTPUT_DIR="/scratch/ty296/memory_benchmark_results/L${L}_maxdim_inf_cutoff${CUTOFF}_ancilla${ANCILLA}"
+    else
+        OUTPUT_DIR="/scratch/ty296/memory_benchmark_results/L${L}_maxdim${MAXDIM}_cutoff${CUTOFF}_ancilla${ANCILLA}"
+    fi
 fi
 
 # Function to run the actual computation
@@ -117,9 +126,9 @@ run_computation() {
     fi
     
     # Ensure the main json_data directory exists (Julia program expects this)
-    mkdir -p "/scratch/ty296/json_data"
+    mkdir -p "/scratch/ty296/json_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
     
-    JULIA_CMD="singularity exec /scratch/ty296/CT_MPS_mini/julia_CT.sif julia --sysimage /scratch/ty296/CT_MPS_mini/ct_with_wrapper.so /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L $L --p_range $P_RANGE --p_fixed_name $P_FIXED_NAME --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --n_chunk_realizations $N_CHUNK_REALIZATIONS --job_id $JOB_ID --random"
+    JULIA_CMD="singularity exec /scratch/ty296/CT_MPS_mini/julia_CT.sif julia --sysimage /scratch/ty296/CT_MPS_mini/ct_with_wrapper.so /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L $L --p_range $P_RANGE --p_fixed_name $P_FIXED_NAME --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --cutoff $CUTOFF --n_chunk_realizations $N_CHUNK_REALIZATIONS --job_id $JOB_ID --random"
 
     echo "Running command: /usr/bin/time $JULIA_CMD"
 
@@ -163,7 +172,7 @@ run_computation() {
         fi
         
         # Check if JSON output file exists and move it to benchmark directory
-        SOURCE_JSON_FILE="/scratch/ty296/json_data/${JOB_ID}_a${ANCILLA}_L${L}.json"
+        SOURCE_JSON_FILE="/scratch/ty296/json_data/${P_FIXED_NAME}${P_FIXED_VALUE}/${JOB_ID}_a${ANCILLA}_L${L}.json"
         BENCHMARK_JSON_FILE="$BENCHMARK_JSON_DIR/results.json"
         
         if [ -f "$SOURCE_JSON_FILE" ]; then
@@ -181,6 +190,7 @@ run_computation() {
 === Memory and Performance Summary ===
 System Size (L): $L
 Max Bond Dimension: $MAXDIM
+Cutoff: $CUTOFF
 Chunk Realizations: $N_CHUNK_REALIZATIONS
 Parameter Points: $N_P_POINTS
 Total Realizations: $TOTAL_REALIZATIONS
@@ -238,6 +248,7 @@ echo "  L: $L"
 echo "  ANCILLA: $ANCILLA"
 echo "  N_CHUNK_REALIZATIONS: $N_CHUNK_REALIZATIONS"
 echo "  MAXDIM: $MAXDIM"
+echo "  CUTOFF: $CUTOFF"
 echo "  OUTPUT_DIR: $OUTPUT_DIR"
 echo "  Note: Benchmark JSON data will be kept separate from main computation data"
 echo ""
@@ -246,47 +257,14 @@ if [ "$DIRECT_RUN" = true ]; then
     echo "Running computation directly..."
     run_computation
 else
-    echo "Submitting batch job and running computation..."
-    # Create a temporary script file to avoid quoting issues with --wrap
-    TEMP_SCRIPT="/tmp/run_memory_benchmark_$$.sh"
+    echo "Running job with srun for continuous output..."
+    # Export variables so they're available in the srun environment
+    export P_FIXED_NAME P_FIXED_VALUE P_RANGE L ANCILLA N_CHUNK_REALIZATIONS MAXDIM CUTOFF OUTPUT_DIR REQUEST_TIME
     
-    cat > "$TEMP_SCRIPT" << 'EOF'
-#!/bin/bash
-# Auto-generated temporary script for memory benchmark
-
-# Re-declare variables (they get passed via environment)
-EOF
-    
-    # Add variable declarations to the temp script
-    cat >> "$TEMP_SCRIPT" << EOF
-P_FIXED_NAME="$P_FIXED_NAME"
-P_FIXED_VALUE="$P_FIXED_VALUE"
-P_RANGE="$P_RANGE"
-L="$L"
-ANCILLA="$ANCILLA"
-N_CHUNK_REALIZATIONS="$N_CHUNK_REALIZATIONS"
-MAXDIM="$MAXDIM"
-OUTPUT_DIR="$OUTPUT_DIR"
-REQUEST_TIME="$REQUEST_TIME"
-
-EOF
-    
-    # Add the function definition to the temp script
-    declare -f run_computation >> "$TEMP_SCRIPT"
-    
-    # Add the function call
-    echo "run_computation" >> "$TEMP_SCRIPT"
-    
-    # Make the script executable
-    chmod +x "$TEMP_SCRIPT"
-    
-    # Submit the batch job
-    sbatch --nodes=1 --ntasks-per-node=1 --mem=$REQUEST_MEMORY --time=$REQUEST_TIME \
-           --output="$OUTPUT_DIR/slurm_%j.out" --error="$OUTPUT_DIR/slurm_%j.err" \
-           "$TEMP_SCRIPT"
-    
-    # Clean up the temporary script after a delay (in case sbatch needs to read it)
-    (sleep 10; rm -f "$TEMP_SCRIPT") &
+    # Run the job with srun, using bash -c to execute the function
+    srun --nodes=1 --ntasks-per-node=1 --mem=$REQUEST_MEMORY --time=$REQUEST_TIME \
+         --output="$OUTPUT_DIR/slurm_%j.out" --error="$OUTPUT_DIR/slurm_%j.err" \
+         bash -c "$(declare -f run_computation); run_computation"
 fi
 
 echo "Session completed" 
