@@ -96,7 +96,7 @@ done
 
 # Set output directory if not provided
 if [ -z "$OUTPUT_DIR" ]; then
-    if [ "$MAXDIM" -eq "9223372036854775807" ]; then
+    if [ "$MAXDIM" == "9223372036854775807" ]; then
         OUTPUT_DIR="/scratch/ty296/memory_benchmark_results/L${L}_maxdim_inf_cutoff${CUTOFF}_ancilla${ANCILLA}"
     else
         OUTPUT_DIR="/scratch/ty296/memory_benchmark_results/L${L}_maxdim${MAXDIM}_cutoff${CUTOFF}_ancilla${ANCILLA}"

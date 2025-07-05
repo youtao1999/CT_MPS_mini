@@ -95,6 +95,10 @@ function parse_my_args()
         arg_type = Int
         default = 0
         help = "job id"
+        "--output_dir", "-o"
+        arg_type = String
+        default = "/scratch/ty296/json_data"
+        help = "output directory"
     end
     return parse_args(s)
 end
@@ -108,7 +112,7 @@ function main()
     p_fixed_value = args["p_fixed_value"]
     
     # Open file once for writing all results
-    filename = "/scratch/ty296/json_data/$p_fixed_name$p_fixed_value/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
+    filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
     result_count = 0
     
     open(filename, "w") do f
