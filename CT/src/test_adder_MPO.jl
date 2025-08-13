@@ -169,8 +169,8 @@ function adder_MPO_binary_carry(i1::Int, xj::Set, qubit_site::Vector{Index{Int64
         println("DEBUG: Binary shifts: 1/6 = $shift_1_6_bits, 1/3 = $shift_1_3_bits")
         
         # Create binary addition MPOs
-        add_mpo_1_6 = create_binary_addition_mpo(shift_1_6_bits, qubit_site)
-        add_mpo_1_3 = create_binary_addition_mpo(shift_1_3_bits, qubit_site)
+        add_mpo_1_6 = create_binary_addition_mpo(shift_1_6_bits, qubit_site, phy_ram, phy_list, ram_phy)
+        add_mpo_1_3 = create_binary_addition_mpo(shift_1_3_bits, qubit_site, phy_ram, phy_list, ram_phy)
         
         # Create conditional projections
         P0 = P_MPO([phy_ram[i2]], [0], qubit_site)  # Use 1/6 shift when site i2 = |0⟩

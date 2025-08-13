@@ -14,9 +14,13 @@ using Serialization
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int)
 
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
+    initial_maxdim = CT.max_bond_dim(ct_f.mps)
+    println("initial mps: ", ct_f.mps[10])
+    println("initial maxdim: ", initial_maxdim)
     i=1
-    T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
+    # T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
+    T_max = 10
 
     for idx in 1:T_max
         println(idx)
