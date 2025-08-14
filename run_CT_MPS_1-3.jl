@@ -16,6 +16,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
 
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff)
     i=1
+    # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
 
     for idx in 1:T_max
@@ -25,10 +26,10 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
-        EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2))
+        EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=0)
         return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     else
-        SA=CT.von_Neumann_entropy(ct_f.mps,1)
+        SA=CT.von_Neumann_entropy(ct_f.mps,1;n=0)
         return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     end
 end
