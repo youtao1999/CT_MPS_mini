@@ -36,7 +36,7 @@ From: julia:1.9.3
     julia --project=${HOME}/julia_depot/environments/CT -e 'using Pkg; Pkg.instantiate()'
 
 %environment
-    export JULIA_NUM_THREADS=2
+    export JULIA_NUM_THREADS=1
     export OPENBLAS_NUM_THREADS=1
     export JULIA_PROJECT=${HOME}/julia_depot/environments/CT
     # Ensure this is the only depot path

@@ -1,0 +1,17 @@
+name = "CT"
+uuid = "135cdcc2-6ae6-449e-9f49-45ba4c2243b3"
+authors = ["Haining Pan <hnpan@terpmail.umd.edu>"]
+version = "0.1.0"
+
+[deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ITensors = "9136182c-28ba-11e9-034c-db9fb085ebd5"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MKL = "33e6dc65-8f57-5167-99aa-e5a354878fb2"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+TCIITensorConversion = "9f0aa9f4-9415-4e6a-8795-331ebf40aa04"
+TensorCrossInterpolation = "b261b2ec-6378-4871-b32e-9173bb050604"
+TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
