@@ -29,10 +29,10 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
-        EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2))
+        EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2); n=0)
         return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     else
-        SA=CT.von_Neumann_entropy(ct_f.mps,1)
+        SA=CT.von_Neumann_entropy(ct_f.mps,1; n=0)
         return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj)
     end
 end
