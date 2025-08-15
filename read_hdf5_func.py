@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import os
 import glob
 from typing import Dict, List, Tuple, Optional
+from tqdm import tqdm
 
 def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: bool = False, threshold: float = 1e-16) -> float:
     """
@@ -149,7 +150,8 @@ def load_hdf5_data(data_path: str, p_fixed_name: str = 'p_ctrl', p_fixed_value: 
     
     all_data = []
     
-    for h5_file in h5_files:
+    for h5_file in tqdm(h5_files, desc="Processing HDF5 files"):
+        
         try:
             # Read all results from this file
             results = read_hdf5_file(h5_file, load_sv_arrays=True)
@@ -330,14 +332,14 @@ def plot_hdf5_EE_vs_p(data_list: List[Dict], groupname: str, p_fixed_name: str, 
     # Save plot if requested
     if save_plot:
         os.makedirs('/scratch/ty296/plots', exist_ok=True)
-        plot_filename = f'/scratch/ty296/plots/{plot_type}_of_EE_vs_{varying_p_name}_fixed_{p_fixed_name}{p_fixed_value}_hdf5.png'
+        plot_filename = f'/scratch/ty296/plots/{plot_type}_of_EE_vs_{varying_p_name}_fixed_{p_fixed_name}{p_fixed_value}_hdf5_threshold{threshold:.0e}.png'
         plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
         print(f"Plot saved to: {plot_filename}")
     
-    # Save data if requested
+    # Save data if requested    
     if save_data:
         os.makedirs('/scratch/ty296/plots', exist_ok=True)
-        data_filename = f'/scratch/ty296/plots/{plot_type}_of_EE_vs_{varying_p_name}_fixed_{p_fixed_name}{p_fixed_value}_hdf5.npz'
+        data_filename = f'/scratch/ty296/plots/{plot_type}_of_EE_vs_{varying_p_name}_fixed_{p_fixed_name}{p_fixed_value}_hdf5_threshold{threshold:.0e}.npz'
         np.savez(data_filename, **{f'{groupname}_{gv}_{varying_p_name}': plot_data[gv][varying_p_name] 
                                    for gv in plot_data},
                  **{f'{groupname}_{gv}_{data_key}': plot_data[gv][data_key] 
@@ -417,7 +419,7 @@ if __name__ == "__main__":
         varying_p_name = 'p_proj' if p_fixed_name == 'p_ctrl' else 'p_ctrl'
         
         # Create plots for each threshold by modifying the data temporarily
-        for i, threshold in enumerate(thresholds):
+        for i, threshold in enumerate(tqdm(thresholds, desc="Generating plots for thresholds")):
             threshold_data = []
             ee_key = f'EE_n0_threshold_{threshold:.0e}'
             
@@ -429,7 +431,6 @@ if __name__ == "__main__":
                     threshold_data.append(temp_point)
             
             if threshold_data:
-                print(f"  Plotting threshold {threshold:.0e}...")
                 # Plot mean
                 plot_hdf5_EE_vs_p(threshold_data, groupname, p_fixed_name, p_fixed_value, 
                                  save_plot=True, show_plot=False, plot_type='mean')
