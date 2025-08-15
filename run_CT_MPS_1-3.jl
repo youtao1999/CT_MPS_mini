@@ -17,11 +17,9 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
 
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
     initial_maxdim = CT.max_bond_dim(ct_f.mps)
-    println("initial mps: ", ct_f.mps[10])
-    println("initial maxdim: ", initial_maxdim)
     i=1
-    # T_max = 1
-    T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
+    T_max = 1
+    # T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
 
     for idx in 1:T_max
         println(idx)
@@ -78,11 +76,10 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
                           args::Dict, ancilla::Int, n::Int=0)
     
     # Determine if we need to create or append to file
-    file_mode = isfile(filename) ? "r+" : "w"
-    
+    file_mode = isfile(filename) ? "r+" : "cw"
     h5open(filename, file_mode) do file
         # Initialize file structure if new file
-        if file_mode == "w"
+        if file_mode == "cw"
             metadata_group = create_group(file, "metadata")
             sv_arrays_group = create_group(file, "singular_values")
         else
@@ -116,10 +113,10 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
         # Store singular values with compression (always present in HDF5 files)
         sv_data = Float64.(entropy_data)
         
-        # Use compression for singular value arrays (no chunking for now)
         sv_dataset = create_dataset(sv_arrays_group, result_name, 
-                                  datatype(Float64), dataspace(sv_data),
-                                  shuffle=true, deflate=6)
+        datatype(Float64), dataspace(sv_data),
+        chunk=(min(1000, length(sv_data)),), 
+        shuffle=true, deflate=6)
         write(sv_dataset, sv_data)        
         # No global metadata stored
     end
@@ -402,7 +399,7 @@ function main()
                     
                     # Get results as dictionary (scalar entropy only)
                     results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=false,n=0)
-                    data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization" => i))
+                    data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization number" => i))
                     
                     # Write each result as a separate line (JSON Lines format)
                     println(f, JSON.json(data_to_serialize))
