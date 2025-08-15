@@ -29,18 +29,18 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
         if sv
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=0,sv=sv)
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv)
             return O, sv_arr, max_bond
         else
-            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=0)
+            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
             return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     else
         if sv
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;n=0,sv=sv)
+            SA=CT.von_Neumann_entropy(ct_f.mps,1;sv=sv)
             return O, SA, max_bond
         else
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;n=0)
+            SA=CT.von_Neumann_entropy(ct_f.mps,1;n=n)
             return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     end
@@ -73,7 +73,7 @@ Appends results to existing file or creates new file.
 """
 function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entropy_data, max_bond::Int, 
                           p_ctrl::Float64, p_proj::Float64, p_value::Float64, realization::Int, 
-                          args::Dict, ancilla::Int, n::Int=0)
+                          args::Dict, ancilla::Int)
     
     # Determine if we need to create or append to file
     file_mode = isfile(filename) ? "r+" : "cw"
@@ -98,7 +98,6 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
         meta_group["p_value"] = p_value
         meta_group["realization"] = realization
         meta_group["ancilla"] = ancilla
-        meta_group["n"] = n  # von Neumann entropy parameter n
         
         # Store args
         args_group = create_group(meta_group, "args")
@@ -341,6 +340,7 @@ function main()
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
+    n = args["n"]
     
     # Choose storage format based on command line argument
     store_singular_values = args["store_sv"]
@@ -364,13 +364,13 @@ function main()
                 end
                 
                 # Get results as tuple with singular values
-                O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=true,n=0)
+                O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
                 
                 result_count += 1
                 
                 # Store result directly to HDF5
                 store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
-                                p_ctrl, p_proj, p, i, args, args["ancilla"], 0)
+                                p_ctrl, p_proj, p, i, args, args["ancilla"])
                 
                 println("Stored result $result_count to HDF5")
             end
@@ -398,7 +398,7 @@ function main()
                     end
                     
                     # Get results as dictionary (scalar entropy only)
-                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=false,n=0)
+                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
                     data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization number" => i))
                     
                     # Write each result as a separate line (JSON Lines format)
