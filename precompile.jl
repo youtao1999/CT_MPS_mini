@@ -9,7 +9,7 @@ main_interactive(10, 0.3, 0.5, 0, typemax(Int), 1e-10, 43)
 # export TMPDIR="/tmp" # (optional)
 # using PackageCompiler; using Pkg; Pkg.activate("CT")
 # create_sysimage(
-#     [:CT, :ITensors, :ArgParse, :JSON, :MKL],
+#     [:CT, :ITensors, :ArgParse, :JSON, :MKL, :HDF5],
 #     sysimage_path="ct_with_wrapper.so",
 #     precompile_execution_file="precompile.jl",
 #     project="CT"

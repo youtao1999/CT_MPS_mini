@@ -61,7 +61,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Create output directory if it doesn't exist
-OUTPUT_DIR="/scratch/ty296/json_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
+# OUTPUT_DIR="/scratch/ty296/json_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
+OUTPUT_DIR="/scratch/ty296/hdf5_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
 if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
