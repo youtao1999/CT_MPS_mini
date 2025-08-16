@@ -249,7 +249,7 @@ def calculate_variance_and_error(ee_values: List[float]) -> Tuple[float, float]:
 # %%
 def plot_hdf5_EE_vs_p(data_list: List[Dict], groupname: str, p_fixed_name: str, p_fixed_value: float, 
                      save_plot: bool = True, show_plot: bool = False, save_data: bool = True, 
-                     plot_type: str = 'variance') -> Dict:
+                     plot_type: str = 'variance', threshold: float = 1e-16) -> Dict:
     """
     Plot characteristic of EE (variance or mean) vs the varying p parameter for HDF5 data.
     
@@ -385,12 +385,12 @@ if __name__ == "__main__":
         # Plot mean EE vs varying parameter
         print("\\nGenerating mean EE plot...")
         plot_data_mean = plot_hdf5_EE_vs_p(hdf5_data, groupname, p_fixed_name, p_fixed_value, 
-                                        save_plot=True, show_plot=True, plot_type='mean')
+                                        save_plot=True, show_plot=True, plot_type='mean', threshold=1e-16)
         
         # Plot variance of EE vs varying parameter
         print("\\nGenerating variance plot...")
         plot_data_var = plot_hdf5_EE_vs_p(hdf5_data, groupname, p_fixed_name, p_fixed_value, 
-                                        save_plot=True, show_plot=True, plot_type='variance')
+                                        save_plot=True, show_plot=True, plot_type='variance', threshold=1e-16)
     else:
         print("No data found. Please check the file paths and structure.")
 
@@ -400,7 +400,7 @@ if __name__ == "__main__":
     print("="*60)
     
     # Define threshold range from 1e-15 to 1e-5 on log scale
-    thresholds = np.logspace(-15, -5, 11)
+    thresholds = np.logspace(-14, -5, 10)
     print(f"Analyzing {len(thresholds)} thresholds from {thresholds[0]:.0e} to {thresholds[-1]:.0e}")
     
     # Load data with threshold analysis using the updated function
@@ -433,10 +433,10 @@ if __name__ == "__main__":
             if threshold_data:
                 # Plot mean
                 plot_hdf5_EE_vs_p(threshold_data, groupname, p_fixed_name, p_fixed_value, 
-                                 save_plot=True, show_plot=False, plot_type='mean')
+                                 save_plot=True, show_plot=False, plot_type='mean', threshold=threshold)
                 # Plot variance  
                 plot_hdf5_EE_vs_p(threshold_data, groupname, p_fixed_name, p_fixed_value, 
-                                 save_plot=True, show_plot=False, plot_type='variance')
+                                 save_plot=True, show_plot=False, plot_type='variance', threshold=threshold)
         
         print("\\nThreshold analysis completed!")
         print(f"Generated plots for mean and variance of Hartley entropy vs {varying_p_name}")
