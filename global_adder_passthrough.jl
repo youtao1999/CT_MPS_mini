@@ -15,15 +15,29 @@ function single_site_add_folded!(shift_bit::Int64, ram_pos::Int64, initial_state
     qubit_site = siteinds(initial_state)
     T_left_ind = Index(2, "Carry,c=$(ram_pos-1)")
     T_right_ind = Index(2, "Carry,c=$(ram_pos)")
-    T = create_addition_tensor_with_carry(shift_bit, qubit_site[ram_pos], prime(qubit_site[ram_pos]), T_right_ind, T_left_ind);
-    # println("T", inds(T))
-    # println(T.tensor[:,:,1,1])
-    id_op_right_ind = Index(2, "Carry,c=$(ram_pos+1)")
-    id_op = create_identity_tensor_4d(qubit_site[ram_pos+1], prime(qubit_site[ram_pos+1]), id_op_right_ind, T_right_ind);
-    # println("T", inds(T))
-    # println("id_op", inds(id_op))
-    # println(id_op.tensor[1,:,:,1])
-    gate = T * id_op
+    gate = ITensor()
+    if ram_pos % 2 == 1
+        T = create_addition_tensor_with_carry(shift_bit, qubit_site[ram_pos], prime(qubit_site[ram_pos]), T_right_ind, T_left_ind);
+        # println("T", inds(T))
+        # println(T.tensor[:,:,1,2])
+        id_op_right_ind = Index(2, "Carry,c=$(ram_pos+1)")
+        id_op = create_identity_tensor_4d(qubit_site[ram_pos+1], prime(qubit_site[ram_pos+1]), id_op_right_ind, T_right_ind);
+        # println("T", inds(T))
+        # println("id_op", inds(id_op))
+        # println(id_op.tensor[2,:,:,2])
+        gate = T * id_op
+    else
+        T = create_addition_tensor_with_carry(shift_bit, qubit_site[ram_pos], prime(qubit_site[ram_pos]), T_left_ind, T_right_ind);
+        # println("T", inds(T))
+        # println(T.tensor[:,:,1,2])
+        id_op_right_ind = Index(2, "Carry,c=$(ram_pos+1)")
+        id_op = create_identity_tensor_4d(qubit_site[ram_pos+1], prime(qubit_site[ram_pos+1]), T_right_ind, id_op_right_ind);
+        # println("T", inds(T))
+        # println("id_op", inds(id_op))
+        # println(id_op.tensor[2,:,:,2])
+        gate = T * id_op
+    end
+    # if ram_pos is even, then take the transpose of the gate
     # println("gate inds", inds(gate))
     # contract the first two qubit sites out of the three
     # println("upon receiving the gate, ", inds(initial_state[ram_pos]), " and ", inds(initial_state[ram_pos+1]))
@@ -59,66 +73,74 @@ function global_adder_folded(initial_state::MPS, ram_phy::Vector{Int}, shift_bit
     L = length(shift_bits)
     for ram_pos in 1:L-2
         shift_bit = shift_bits[ram_phy[ram_pos]]
-        println(shift_bit)
+        # println(shift_bit)
         single_site_add_folded!(shift_bit, ram_pos, initial_state)
-        println("after adding ", ram_pos, " ", inds(initial_state))
+        # println("after adding ", ram_pos, " ", inds(initial_state))
+        # check_entanglement_spectrum(initial_state, ram_phy, shift_bits)
     end
-    # check_entanglement_spectrum(initial_state, ram_phy, shift_bits)
+    # tensor = initial_state[1] * initial_state[2] * initial_state[3]
+    # println(inds(tensor))
+    # print_nonzero_coordinates(tensor.tensor)
     # no carry into the lsb tensor
     lsb_tensor = ITensor(filterinds(initial_state[2], tags="Carry,c=1"))
     lsb_tensor[inds(lsb_tensor)[1]=>1] = 1.0
     # print(inds(lsb_tensor))
     initial_state[2] = initial_state[2] * lsb_tensor;
+    # println(initial_state[2].tensor)
     # println(inds(initial_state[2]))
+
 
     # discard the carry out of the msb tensor
     msb_tensor = ITensor(filterinds(initial_state[1], tags="Carry,c=0"))
     msb_tensor[inds(msb_tensor)[1]=>1] = 1.0
     msb_tensor[inds(msb_tensor)[1]=>2] = 1.0
     initial_state[1] = initial_state[1] * msb_tensor;
-    normalize!(initial_state)
+
+    # check_entanglement_spectrum(initial_state, ram_phy, shift_bits)
     # println(inds(initial_state[1]))
     # orthogonalize!(initial_state, 1)
     # println(initial_state[1])
-    # # now take care of the final boundary contraction of 0 and 1
-    # c_mid_left = filterinds(initial_state[L-2], tags = "Carry")[1]
-    # c_mid_right = filterinds(initial_state[L-1], tags = "Carry")[1]
-    # c_mid = Index(2, "Carry,c=$(L)")
-    # # print(c_Lm1)
-    # # print(c_L)
-    # # println(inds(initial_state[L-2]))
-    # T_Lm1 = create_addition_tensor_with_carry(1, qubit_site[L-1], prime(qubit_site[L-1]), c_mid_left, c_mid)
-    # # println(inds(T_Lm1))
-    # T_L = create_addition_tensor_with_carry(0, qubit_site[L], prime(qubit_site[L]), c_mid, c_mid_right)
+    # now take care of the final boundary contraction of 0 and 1
+    c_mid_left = filterinds(initial_state[L-2], tags = "Carry")[1]
+    # println(c_mid_left)
+    c_mid_right = filterinds(initial_state[L-1], tags = "Carry")[1]
+    # println(c_mid_right)
+    c_mid = Index(2, "Carry,c=$(L)")
+    # println(c_mid)
+    # print(c_Lm1)
+    # print(c_L)
+    # println(inds(initial_state[L-2]))
+    T_Lm1 = create_addition_tensor_with_carry(1, qubit_site[L-1], prime(qubit_site[L-1]), c_mid, c_mid_left)
+    # println(inds(T_Lm1))
+    T_L = create_addition_tensor_with_carry(0, qubit_site[L], prime(qubit_site[L]), c_mid_right, c_mid)
+    initial_state[L-2] = initial_state[L-2] * T_Lm1
+    # println(inds(initial_state[L-2]))
+    tmp_combined_tensor = initial_state[L-2] * initial_state[L-1]
+    # println(inds(tmp_combined_tensor))
 
-    # initial_state[L-2] = initial_state[L-2] * T_Lm1
-    # # println(inds(initial_state[L-2]))
-    # tmp_combined_tensor = initial_state[L-2] * initial_state[L-1]
-    # # println(inds(tmp_combined_tensor))
+    # svd the combined tensor
+    left_inds = union(
+        filterinds(tmp_combined_tensor, tags="Link,l=$(L-3)"),
+        filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-2)")
+    )
+    # println(left_inds)
+    U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-2)")
+    initial_state[L-2] = U
+    initial_state[L-1] = S*V
 
-    # # svd the combined tensor
-    # left_inds = union(
-    #     filterinds(tmp_combined_tensor, tags="Link,l=$(L-3)"),
-    #     filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-2)")
-    # )
-    # # println(left_inds)
-    # U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-2)")
-    # initial_state[L-2] = U
-    # initial_state[L-1] = S*V
-
-    # # act the last addition tensor
-    # tmp_combined_tensor = initial_state[L-1] * initial_state[L]
-    # tmp_combined_tensor = tmp_combined_tensor * T_L
-    # left_inds = union(
-    #     filterinds(tmp_combined_tensor, tags="Link,l=$(L-2)"),
-    #     filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-1)")
-    # )
-    # U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-1)")
-    # initial_state[L-1] = U
-    # initial_state[L] = S*V
-    # noprime!(initial_state)
-    # orthogonalize!(initial_state, L)
-    # check_entanglement_spectrum(initial_state, ram_phy, shift_bits)
+    # act the last addition tensor
+    tmp_combined_tensor = initial_state[L-1] * initial_state[L]
+    tmp_combined_tensor = tmp_combined_tensor * T_L
+    left_inds = union(
+        filterinds(tmp_combined_tensor, tags="Link,l=$(L-2)"),
+        filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-1)")
+    )
+    U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-1)")
+    initial_state[L-1] = U
+    initial_state[L] = S*V
+    noprime!(initial_state)
+    normalize!(initial_state)
+    check_entanglement_spectrum(initial_state, ram_phy, shift_bits)
     return initial_state
 end
 
@@ -142,5 +164,20 @@ function check_entanglement_spectrum(initial_state::MPS, ram_phy::Vector{Int}, s
     for cut in 1:L-1
         spectrum = entanglement_spectrum(initial_state, cut)
         println("Cut between sites $cut and $(cut+1): ", spectrum)
+    end
+end
+
+function print_nonzero_coordinates(T)
+    # Get the dimensions of the tensor
+    dims = size(T)
+    
+    # Iterate through all possible indices
+    for idx in CartesianIndices(dims)
+        # Check if element is nonzero
+        if T[idx] != 0
+            # Convert CartesianIndex to tuple for cleaner output
+            coords = Tuple(idx)
+            println("Nonzero at coordinates $coords: $(T[idx])")
+        end
     end
 end
