@@ -1,8 +1,6 @@
 # %%
 import sys
 sys.path.append('/scratch/ty296/CT_MPS_mini')
-from read_hdf5_func import von_neumann_entropy_sv
-
 # %%
 import h5py
 import glob
@@ -11,6 +9,40 @@ import tqdm
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 import pandas as pd
+
+def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: bool = False, threshold: float = 1e-16) -> float:
+    """
+    Compute von Neumann entropy from singular values.
+    
+    Parameters:
+    - sv_arr: array of singular values
+    - n: Renyi entropy parameter (n=1 for von Neumann)
+    - positivedefinite: if True, treat sv_arr as probabilities; if False, square them first
+    - threshold: minimum value to avoid log(0)
+    
+    Returns:
+    - Entropy value
+    """
+    mask = sv_arr > threshold
+    sv_arr = sv_arr[mask]
+    if positivedefinite:
+        p = np.maximum(sv_arr, threshold)
+        p = sv_arr
+    else:
+        p = np.maximum(sv_arr, threshold) ** 2
+        p = sv_arr ** 2
+
+    if n == 1:
+        # von Neumann entropy: -sum(p * log(p))
+        SvN = -np.sum(p * np.log(p))
+    elif n == 0:
+        # Hartley entropy: log(number of non-zero elements)
+        SvN = np.log(len(sv_arr))
+    else:
+        # Renyi entropy: log(sum(p^n)) / (1 - n)
+        SvN = np.log(np.sum(p**n)) / (1 - n)
+
+    return SvN
 
 def postprocessing(sv_combined="/scratch/ty296/hdf5_data_combined/sv_combined.h5", dir_name='/scratch/ty296/hdf5_data/p_ctrl0.4'):
     h5_files = glob.glob(os.path.join(dir_name, '*.h5'))
