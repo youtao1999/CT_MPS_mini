@@ -86,7 +86,7 @@ def h5_to_csv(hdf5_combined, n, threshold, save_folder = '/scratch/ty296/plots')
     with h5py.File(hdf5_combined, 'r') as f:
         from collections import defaultdict
         groups = defaultdict(list)
-        for real_key in f.keys():
+        for real_key in tqdm.tqdm(f.keys()):
             s0 = von_neumann_entropy_sv(f[real_key][()], n=n, positivedefinite=False, threshold=threshold)
             # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
             key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
@@ -99,7 +99,7 @@ def h5_to_csv(hdf5_combined, n, threshold, save_folder = '/scratch/ty296/plots')
             variance, se_var = calculate_variance_and_error(s0_list)
             # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
             data.append(list(key_val) + [mean, sem, variance, se_var])
-        print(data)
+        # print(data)
 
         df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var'])
         # save the data to a csv file
@@ -151,6 +151,7 @@ def plot_from_csv(csv_path):
     ax1.set_ylabel('Mean Entropy ± SEM')
     ax1.set_title('Mean Entropy vs p_proj for Different L')
     ax1.legend()
+    ax1.set_xlim(0.5, 1.0)
     ax1.grid(True, alpha=0.3)
 
     # Plot 2: p_proj vs variance ± se_var
@@ -169,10 +170,12 @@ def plot_from_csv(csv_path):
     ax2.set_ylabel('Variance ± SE')
     ax2.set_title('Variance vs p_proj for Different L')
     ax2.legend()
+    ax2.set_xlim(0.5, 1.0)
     ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f'/scratch/ty296/plots/s{n}_threshold{threshold:.1e}.png')
+    # plt.show()
 
 
 # %%
@@ -184,14 +187,13 @@ if __name__ == "__main__":
     dir_name = '/scratch/ty296/hdf5_data/p_ctrl0.4'
     save_folder = '/scratch/ty296/plots'
     n = 0
-    threshold = 1e-1
-    postprocessing(sv_combined, dir_name)
+    # postprocessing(sv_combined, dir_name) # once run this once to combine all the hdf5 files
 
-    df = h5_to_csv(sv_combined, n=0, threshold=1e-1)
+    for threshold in np.logspace(-15, -5, 10):
+        df = h5_to_csv(sv_combined, n=0, threshold=threshold)
+        csv_path = os.path.join(save_folder, f's{n}_threshold{threshold:.1e}.csv')
+        plot_from_csv(csv_path)
 
-    # Then plot from the generated CSV:
-    csv_path = os.path.join(save_folder, f's{n}_threshold{threshold}.csv')
-    plot_from_csv(csv_path)
 
 
 
