@@ -64,8 +64,8 @@ class data_processor:
         p_vary_label = 'p_proj'
         p_fixed_label = 'p_ctrl' if p_vary_label == 'p_proj' else 'p_proj'
         p_fixed_value = self.df_all_data[p_fixed_label].unique()[0]
-        y_label = 'Mean EE'
-        title = f'Mean EE vs p_proj ({p_fixed_label}={p_fixed_value})'
+        y_label = 'Variance of EE'
+        title = f'Variance of EE vs p_proj ({p_fixed_label}={p_fixed_value})'
         # Plot each L value
         for L in L_values:
             # Filter data for this L value
@@ -75,26 +75,26 @@ class data_processor:
             grouped = L_data.groupby(p_vary_label)['s_0'].agg([('mean', mean_func), ('sem', sem_func), ('variance', variance_func), ('sev', sev_func)]).reset_index()
             # Plot mean with error bars
             plt.errorbar(grouped[p_vary_label], 
-                        grouped['mean'], 
-                        yerr=grouped['sem'], 
+                        grouped['variance'], 
+                        yerr=grouped['sev'], 
                         label=f'L={L}', marker='o')
-
+    
         plt.xlabel(p_vary_label)
         plt.ylabel(y_label)
         plt.title(title)
         plt.legend()
         plt.grid(True)
-        plt.savefig(f'/scratch/ty296/plots/s{self.n}_t{self.threshold}.png')
+        plt.savefig(f'/scratch/ty296/plots/s{self.n}_t{self.threshold:.1e}_var.png')
         plt.show()
 
     def save_plotting_data(self):
-        self.df_all_data.to_csv(f'/scratch/ty296/plots/s{self.n}_t{self.threshold}.csv')
+        self.df_all_data.to_csv(f'/scratch/ty296/plots/s{self.n}_t{self.threshold:.1e}_var.csv')
 
 
 # %%
 if __name__ == '__main__':
     dir_name = '/scratch/ty296/hdf5_data/p_ctrl0.4'
-    for threshold in np.logspace(-16, -5, 10):
+    for threshold in np.logspace(-5, -1, 5):
         data = data_processor(dir_name, n=0, threshold=threshold)
         data.plot()
         data.save_plotting_data()

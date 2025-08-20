@@ -4,9 +4,6 @@ groupname = 'L'
 p_fixed_name = 'p_ctrl'
 p_fixed_value = 0.4
 
-
-
-
 # %%
 import h5py
 import numpy as np
@@ -29,10 +26,12 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: boo
     Returns:
     - Entropy value
     """
+    mask = sv_arr > threshold
+    sv_arr = sv_arr[mask]
     if positivedefinite:
-        p = np.maximum(sv_arr, threshold)
+        p = sv_arr
     else:
-        p = np.maximum(sv_arr, threshold) ** 2
+        p = sv_arr ** 2
     
     if n == 1:
         # von Neumann entropy: -sum(p * log(p))
