@@ -103,10 +103,10 @@ def h5_to_csv(hdf5_combined, n, threshold, save_folder = '/scratch/ty296/plots')
 
         df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var'])
         # save the data to a csv file
-        csv_path = os.path.join(save_folder, f's{n}_threshold{threshold}.csv')
+        csv_path = os.path.join(save_folder, f's{n}_threshold{threshold:.1e}.csv')
         df.to_csv(csv_path, index=False)
 
-        return df
+        return df, csv_path
 
 def plot_from_csv(csv_path):
     """
@@ -190,8 +190,7 @@ if __name__ == "__main__":
     # postprocessing(sv_combined, dir_name) # once run this once to combine all the hdf5 files
 
     for threshold in np.logspace(-15, -5, 10):
-        df = h5_to_csv(sv_combined, n=0, threshold=threshold)
-        csv_path = os.path.join(save_folder, f's{n}_threshold{threshold:.1e}.csv')
+        df, csv_path = h5_to_csv(sv_combined, n=0, threshold=threshold, save_folder=save_folder)
         plot_from_csv(csv_path)
 
 
