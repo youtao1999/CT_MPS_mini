@@ -1,3 +1,25 @@
+using ITensors
+const NUMBER_REGEX = r"[0-9]+"
+
+function fraction_to_binary_shift(numerator::Int, denominator::Int, L::Int)
+    total_states = 2^L
+    if numerator == 1 && denominator == 6
+        shift_amount = div(total_states * numerator, denominator) + 1
+    else
+        shift_amount = div(total_states * numerator, denominator)
+    end
+
+    # Convert to L-bit binary vector
+    binary_shift = zeros(Int, L)
+    temp = shift_amount
+    for i in L:-1:1
+        binary_shift[i] = temp % 2
+        temp ÷= 2
+    end
+
+    return binary_shift, shift_amount
+end
+
 function create_identity_tensor_4d(s::Index, s_prime::Index, c_in::Index, c_out::Index)
     id_op = ITensor(c_out, s, s_prime, c_in)
     for outer in 1:2  # first and last index values
@@ -36,14 +58,15 @@ function initialize_links(L, qubit_site, shift_1_3_bits, ram_phy)
     return carry_links, T_vec, id_vec, gate_vec
 end
 
-function global_adder(L, qubit_site, shift_1_3_bits, ram_phy, initial_state)
-    carry_links, T_vec, id_vec, gate_vec = initialize_links(L, qubit_site, shift_1_3_bits, ram_phy);
+function global_adder(initial_state, carry_links, T_vec, id_vec, gate_vec, qubit_site, shift_1_3_bits, ram_phy)
     for i1 in 1:length(gate_vec)
         gate = gate_vec[i1]
+        println(i1)
         if i1 <= 2
             # psi_tensor = contract(initial_state[i1], initial_state[i1+1], gate)
             psi_tensor = gate * (initial_state[i1] * initial_state[i1+1])
-            left_inds = filter_highest_tag_number(inds(psi_tensor))
+            @time left_inds = filter_highest_tag_number(inds(psi_tensor))
+            println(left_inds)
             U, S, V = svd(psi_tensor, left_inds, lefttags = "Link,l=$(i1)")
             initial_state[i1] = U
             initial_state[i1+1] = S * V
@@ -52,8 +75,8 @@ function global_adder(L, qubit_site, shift_1_3_bits, ram_phy, initial_state)
             # psi_tensor = contract(initial_state[i1-1], initial_state[i1], initial_state[i1+1], gate)
             psi_tensor = gate * (initial_state[i1-1] * initial_state[i1] * initial_state[i1+1])
             all_3_inds = inds(psi_tensor)
-            mid_inds = filter(idx -> occursin(string(i1), string(tags(idx))), all_3_inds)
-            right_inds = filter(idx -> occursin(string(i1+1), string(tags(idx))), all_3_inds)
+            @time mid_inds = filter(idx -> occursin(string(i1), string(tags(idx))), all_3_inds)
+            @time right_inds = filter(idx -> occursin(string(i1+1), string(tags(idx))), all_3_inds)
             U1, S1, V1 = svd(psi_tensor, setdiff(all_3_inds, right_inds, mid_inds), lefttags = "Link,l=$(i1-1)")
             left_inds_2 = union(mid_inds, filterinds(S1, tags="Link,l=$(i1-1)"))
             U2, S2, V2 = svd(S1 * V1, left_inds_2, lefttags = "Link,l=$(i1)")
@@ -130,23 +153,70 @@ function sort_indices_by_tag_number(indices)
     return sort(collect(indices), by=extract_tag_number)
 end
 
+# function filter_highest_tag_number(indices)
+#     # Extract all tag numbers from indices
+#     tag_numbers = Int[]
+#     println("filter_highest_tag_numberasd")
+#     for idx in indices
+#         tag_str = string(tags(idx))
+#         # Extract numbers from the tag string using regex
+#         numbers = [parse(Int, m.match) for m in eachmatch(r"[0-9]+", tag_str)]
+#         append!(tag_numbers, numbers)
+#     end
+#     # println(tag_numbers)
+#     if isempty(tag_numbers)
+#         return indices
+#     end
+    
+#     max_number = maximum(tag_numbers)
+    
+#     # Filter out indices that contain the maximum number in their tag string
+#     return filter(idx -> !occursin(string(max_number), string(tags(idx))), indices)
+# end
+
 function filter_highest_tag_number(indices)
-    # Extract all tag numbers from indices
-    tag_numbers = Int[]
     
-    for idx in indices
-        tag_str = string(tags(idx))
-        # Extract numbers from the tag string using regex
-        numbers = [parse(Int, m.match) for m in eachmatch(r"[0-9]+", tag_str)]
-        append!(tag_numbers, numbers)
-    end
-    # println(tag_numbers)
-    if isempty(tag_numbers)
-        return indices
+    # Pre-allocate with reasonable size hint
+    begin
+        tag_numbers = Vector{Int}()
+        sizehint!(tag_numbers, length(indices) * 2)
     end
     
-    max_number = maximum(tag_numbers)
+    # Pre-compute tag strings to avoid repeated string() calls
+    begin
+        tag_strings = Vector{String}(undef, length(indices))
+        for (i, idx) in enumerate(indices)
+            tag_strings[i] = string(tags(idx))
+        end
+    end
     
-    # Filter out indices that contain the maximum number in their tag string
-    return filter(idx -> !occursin(string(max_number), string(tags(idx))), indices)
+    # Extract numbers from pre-computed strings
+    begin
+        for tag_str in tag_strings
+            for m in eachmatch(NUMBER_REGEX, tag_str)
+                push!(tag_numbers, parse(Int, m.match))
+            end
+        end
+    end
+    
+    begin
+        if isempty(tag_numbers)
+            return indices
+        end
+        
+        max_number = maximum(tag_numbers)
+        max_number_str = string(max_number)  # Convert once
+    end
+    
+    # Use pre-computed tag strings for filtering - return vector always
+    begin
+        # Always return a vector to avoid tuple conversion overhead
+        filtered_indices = eltype(indices)[]
+        for (i, idx) in enumerate(indices)
+            if !occursin(max_number_str, tag_strings[i])
+                push!(filtered_indices, idx)
+            end
+        end
+        return filtered_indices
+    end
 end

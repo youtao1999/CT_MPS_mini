@@ -6,8 +6,6 @@ using LinearAlgebra
 import TensorCrossInterpolation as TCI
 using TCIITensorConversion
 
-include("test_adder_MPO.jl")
-
 # using TimerOutputs
 # const to = TimerOutput()
 function __init__()
@@ -74,7 +72,6 @@ function CT_MPS(
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
     mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_cutoff,_maxdim0)
-    # adder=[adder_MPO_binary_carry(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
     ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, _eps, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _cutoff, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
