@@ -8,104 +8,76 @@ function create_identity_tensor_4d(s::Index, s_prime::Index, c_in::Index, c_out:
     return id_op
 end
 
-function single_site_add_folded!(shift_bit::Int64, ram_pos::Int64, initial_state::MPS, qubit_site::Vector{Index{Int64}})
-    """
-    This function adds [shift_bit::Int64] (0 or 1) to the ram site [ram_pos::Int64] with the state being [initial_state::MPS] on the folded structure. The "Carry,c=ram_pos" stems from site [ram_pos] and typically ends on site [ram_pos+2] jumping over [ram_pos+1]. This function automatically passes this leg through the middle site [ram_pos+1] by attaching an identity tensor to the gate on [ram_pos+1]. Then performs the two-site contraction before SVD-ing it back into MPS form. 
-    """
-    T_left_ind = Index(2, "Carry,c=$(ram_pos-1)")
-    if ram_pos > 2
-        T_left_ind = filterinds(initial_state[ram_pos-1], tags="Carry,c=$(ram_pos-1)")[1]
+function create_addition_tensor_with_carry(shift_bit::Int, s::Index, s_prime::Index, c_in::Index, c_out::Index)
+    T = ITensor(s, s_prime, c_in, c_out)
+    
+    # Fill tensor according to binary addition logic
+    for s_val in 1:2, c_in_val in 1:2  # ITensor uses 1-indexing
+        input_bit = s_val - 1          # Convert to 0/1
+        carry_in_bit = c_in_val - 1    # Convert to 0/1
+        
+        # Binary addition: input + shift + carry_in
+        sum = input_bit + shift_bit + carry_in_bit
+        output_bit = sum % 2
+        carry_out_bit = sum ÷ 2
+        
+        # Set tensor element (convert back to 1-indexing)
+        T[s => s_val, s_prime => output_bit + 1, c_in => c_in_val, c_out => carry_out_bit + 1] = 1.0
     end
-    T_right_ind = Index(2, "Carry,c=$(ram_pos)")
-    gate = ITensor()
-    id_op_right_ind = Index(2, "Carry,c=$(ram_pos+1)")
-    T_inds_pair = ram_pos % 2 == 1 ? (T_right_ind, T_left_ind) : (T_left_ind, T_right_ind)
-    id_inds_pair = ram_pos % 2 == 1 ? (id_op_right_ind, T_right_ind) : (T_right_ind, id_op_right_ind)
-    T = create_addition_tensor_with_carry(shift_bit, qubit_site[ram_pos], prime(qubit_site[ram_pos]), T_inds_pair...);
-    id_op = create_identity_tensor_4d(qubit_site[ram_pos+1], prime(qubit_site[ram_pos+1]), id_inds_pair...);
-    gate = T * id_op
-
-    if ram_pos <= 2
-        left_original_inds = inds(initial_state[ram_pos])
-        link_right = filterinds(initial_state[ram_pos+1], tags="Link,l=$(ram_pos)")
-        left_original_inds = setdiff(left_original_inds, link_right)
-
-        # contract the gate with the two qubit sites
-        psi = gate * (initial_state[ram_pos] * initial_state[ram_pos+1])
-        noprime!(psi)
-        carry_left = filterinds(psi, tags="Carry,c=$(ram_pos-1)")
-        link_left = filterinds(psi, tags="Link,l=$(ram_pos-1)")
-        qubit_left = filterinds(psi, tags="Site,n=$(ram_pos)")
-        left_inds = unioninds(carry_left, link_left, qubit_left, left_original_inds)
-        U, S, V = svd(psi, left_inds; cutoff=1e-12, lefttags = "Link,l=$(ram_pos)")
-        initial_state[ram_pos] = U
-        initial_state[ram_pos+1] = S*V
-    else
-        link_left = filterinds(initial_state[ram_pos-1], tags="Link,l=$(ram_pos-2)")
-        qubit_left = filterinds(initial_state[ram_pos-1], tags="Site,n=$(ram_pos-1)")
-        carry_left = filterinds(initial_state[ram_pos-1], tags="Carry,c=$(ram_pos-2)")
-        left_indices = unioninds(link_left, qubit_left, carry_left)
-        # contract the gate with the two qubit sites
-        psi = gate * (initial_state[ram_pos] * initial_state[ram_pos+1] * initial_state[ram_pos-1])
-        noprime!(psi)
-        U, S, V = svd(psi, left_indices; cutoff=1e-12, lefttags = "Link,l=$(ram_pos-1)")
-        initial_state[ram_pos-1] = U
-        initial_state[ram_pos] = S*V
-
-        # now svd the right site
-        left_indices = sort_indices_by_tag_number(inds(initial_state[ram_pos]))[1:end÷2]
-        U, S, V = svd(initial_state[ram_pos], left_indices; cutoff=1e-12, lefttags = "Link,l=$(ram_pos)")
-        initial_state[ram_pos] = U
-        initial_state[ram_pos+1] = S*V
-    end
+    
+    return T
 end
 
-function global_adder_folded(initial_state::MPS, ram_phy::Vector{Int}, shift_bits::Vector{Int}, qubit_site::Vector{Index{Int64}})
-    L = length(shift_bits)
-    for ram_pos in 1:4
-        shift_bit = shift_bits[ram_phy[ram_pos]]
-        single_site_add_folded!(shift_bit, ram_pos, initial_state, qubit_site)
+function initialize_links(L, qubit_site, shift_1_3_bits, ram_phy)
+    carry_links = [Index(2, "Carry,c=$(ram_pos-1)") for ram_pos in 1:L+1]
+    T_vec = [ram_pos % 2 == 1 ? create_addition_tensor_with_carry(shift_1_3_bits[ram_phy[ram_pos]], qubit_site[ram_pos], prime(qubit_site[ram_pos]), carry_links[ram_pos+1], carry_links[ram_pos]) : create_addition_tensor_with_carry(shift_1_3_bits[ram_phy[ram_pos]], qubit_site[ram_pos], prime(qubit_site[ram_pos]), carry_links[ram_pos], carry_links[ram_pos+1]) for ram_pos in 1:L];
+    id_vec = [ram_pos % 2 == 1 ? create_identity_tensor_4d(qubit_site[ram_pos], prime(qubit_site[ram_pos]), carry_links[ram_pos], carry_links[ram_pos+1]) : create_identity_tensor_4d(qubit_site[ram_pos], prime(qubit_site[ram_pos]), carry_links[ram_pos], carry_links[ram_pos+1]) for ram_pos in 2:L];
+    gate_vec = [T_vec[ram_pos] * id_vec[ram_pos] for ram_pos in 1:L-1];
+    return carry_links, T_vec, id_vec, gate_vec
+end
+
+function global_adder(L, qubit_site, shift_1_3_bits, ram_phy, initial_state)
+    carry_links, T_vec, id_vec, gate_vec = initialize_links(L, qubit_site, shift_1_3_bits, ram_phy);
+    for i1 in 1:length(gate_vec)
+        gate = gate_vec[i1]
+        if i1 <= 2
+            # psi_tensor = contract(initial_state[i1], initial_state[i1+1], gate)
+            psi_tensor = gate * (initial_state[i1] * initial_state[i1+1])
+            left_inds = filter_highest_tag_number(inds(psi_tensor))
+            U, S, V = svd(psi_tensor, left_inds, lefttags = "Link,l=$(i1)")
+            initial_state[i1] = U
+            initial_state[i1+1] = S * V
+            noprime!(initial_state)
+        else
+            # psi_tensor = contract(initial_state[i1-1], initial_state[i1], initial_state[i1+1], gate)
+            psi_tensor = gate * (initial_state[i1-1] * initial_state[i1] * initial_state[i1+1])
+            all_3_inds = inds(psi_tensor)
+            mid_inds = filter(idx -> occursin(string(i1), string(tags(idx))), all_3_inds)
+            right_inds = filter(idx -> occursin(string(i1+1), string(tags(idx))), all_3_inds)
+            U1, S1, V1 = svd(psi_tensor, setdiff(all_3_inds, right_inds, mid_inds), lefttags = "Link,l=$(i1-1)")
+            left_inds_2 = union(mid_inds, filterinds(S1, tags="Link,l=$(i1-1)"))
+            U2, S2, V2 = svd(S1 * V1, left_inds_2, lefttags = "Link,l=$(i1)")
+            initial_state[i1-1] = U1
+            initial_state[i1] = U2
+            initial_state[i1+1] = S2 * V2
+            noprime!(initial_state)
+        end
     end
+    
     lsb_tensor = ITensor(filterinds(initial_state[2], tags="Carry,c=1"))
     lsb_tensor[inds(lsb_tensor)[1]=>1] = 1.0
     initial_state[2] = initial_state[2] * lsb_tensor;
-
+    
     # discard the carry out of the msb tensor
     msb_tensor = ITensor(filterinds(initial_state[1], tags="Carry,c=0"))
     msb_tensor[inds(msb_tensor)[1]=>1] = 1.0
     msb_tensor[inds(msb_tensor)[1]=>2] = 1.0
     initial_state[1] = initial_state[1] * msb_tensor;
-
-    # # now take care of the final boundary contraction of 0 and 1
-    # c_mid_left = filterinds(initial_state[L-2], tags = "Carry")[1]
-    # c_mid_right = filterinds(initial_state[L-1], tags = "Carry")[1]
-    # c_mid = Index(2, "Carry,c=$(L)")
-    # T_Lm1 = create_addition_tensor_with_carry(1, qubit_site[L-1], prime(qubit_site[L-1]), c_mid, c_mid_left)
-    # T_L = create_addition_tensor_with_carry(0, qubit_site[L], prime(qubit_site[L]), c_mid_right, c_mid)
-    # initial_state[L-2] = initial_state[L-2] * T_Lm1
-    # tmp_combined_tensor = initial_state[L-2] * initial_state[L-1]
-
-    # # svd the combined tensor
-    # left_inds = union(
-    #     filterinds(tmp_combined_tensor, tags="Link,l=$(L-3)"),
-    #     filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-2)")
-    # )
-    # U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-2)")
-    # initial_state[L-2] = U
-    # initial_state[L-1] = S*V
-
-    # # act the last addition tensor
-    # tmp_combined_tensor = initial_state[L-1] * initial_state[L]
-    # tmp_combined_tensor = tmp_combined_tensor * T_L
-    # left_inds = union(
-    #     filterinds(tmp_combined_tensor, tags="Link,l=$(L-2)"),
-    #     filterinds(tmp_combined_tensor, tags="Qubit,n=$(L-1)")
-    # )
-    # U, S, V = svd(tmp_combined_tensor, left_inds; cutoff=1e-12, lefttags = "Link,l=$(L-1)")
-    # initial_state[L-1] = U
-    # initial_state[L] = S*V
-    # noprime!(initial_state)
-    # normalize!(initial_state)
+    
+    psi = contract(initial_state[L-1], initial_state[L], T_vec[L])
+    U, S, V = svd(psi, setdiff(inds(psi), filterinds(inds(psi), tags="Qubit,Site,n=$L")), lefttags = "Link,l=$(L-1)")
+    initial_state[L-1] = U
+    initial_state[L] = S * V
     return initial_state
 end
 
@@ -156,4 +128,25 @@ function sort_indices_by_tag_number(indices)
     end
     
     return sort(collect(indices), by=extract_tag_number)
+end
+
+function filter_highest_tag_number(indices)
+    # Extract all tag numbers from indices
+    tag_numbers = Int[]
+    
+    for idx in indices
+        tag_str = string(tags(idx))
+        # Extract numbers from the tag string using regex
+        numbers = [parse(Int, m.match) for m in eachmatch(r"[0-9]+", tag_str)]
+        append!(tag_numbers, numbers)
+    end
+    # println(tag_numbers)
+    if isempty(tag_numbers)
+        return indices
+    end
+    
+    max_number = maximum(tag_numbers)
+    
+    # Filter out indices that contain the maximum number in their tag string
+    return filter(idx -> !occursin(string(max_number), string(tags(idx))), indices)
 end
