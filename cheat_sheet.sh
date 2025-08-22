@@ -10,4 +10,4 @@
 # Run directly if already on compute node
 /scratch/ty296/CT_MPS_mini/mini_memory_benchmark.sh --direct --L 8 --n-chunk-realizations 5
 
-/scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=12 --P_RANGE="0.0:1.0:2" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.4 --ANCILLA=0 --MAXDIM=200 --N_CHUNK_REALIZATIONS=10 --N_JOBS=2 --MEMORY=40G
+/scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=24 --P_RANGE="0.5:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.4 --ANCILLA=0 --MAXDIM=200 --N_CHUNK_REALIZATIONS=5 --N_JOBS=400 --MEMORY=100G

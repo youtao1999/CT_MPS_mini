@@ -189,7 +189,7 @@ if __name__ == "__main__":
     n = 0
     # postprocessing(sv_combined, dir_name) # once run this once to combine all the hdf5 files
 
-    for threshold in np.logspace(-15, -5, 10):
+    for threshold in np.logspace(-5, -1, 10):
         df, csv_path = h5_to_csv(sv_combined, n=0, threshold=threshold, save_folder=save_folder)
         plot_from_csv(csv_path)
 

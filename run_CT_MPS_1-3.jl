@@ -340,7 +340,6 @@ function main()
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
-    n = args["n"]
     
     # Choose storage format based on command line argument
     store_singular_values = args["store_sv"]
