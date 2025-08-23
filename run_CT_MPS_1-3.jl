@@ -343,7 +343,8 @@ function main()
     
     # Choose storage format based on command line argument
     store_singular_values = args["store_sv"]
-    
+    println("store_singular_values: ", store_singular_values)
+    println("random: ", args["random"])
     if store_singular_values
         # Use HDF5 format for large singular value arrays
         filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).h5"
@@ -361,9 +362,8 @@ function main()
                 else
                     seed = 0
                 end
-                
                 # Get results as tuple with singular values
-                O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
+                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
                 
                 result_count += 1
                 
