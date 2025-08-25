@@ -6,6 +6,8 @@ using LinearAlgebra
 import TensorCrossInterpolation as TCI
 using TCIITensorConversion
 
+# using InteractiveUtils
+
 # using TimerOutputs
 # const to = TimerOutput()
 function __init__()
@@ -409,7 +411,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
         end
     end
     update_history(ct,op_l,p_0)
-    
+    # println(varinfo())
     return i
 end
 

@@ -1,3 +1,4 @@
+# println("initial memory: ", Sys.maxrss() / 1024^2, " MB")
 using Pkg
 using ITensors
 using Random
@@ -14,16 +15,21 @@ using ArgParse
 using Serialization
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
-
+    println("initial memory: ", Sys.maxrss() / 1024^2, " MB")
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
+    initial_state = copy(ct_f.mps)
     initial_maxdim = CT.max_bond_dim(ct_f.mps)
+    println("initial_maxdim: ",initial_maxdim)
     i=1
-    # T_max = 1
+    # T_max = 100
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
-
+    println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
     for idx in 1:T_max
-        println(idx)
+        # println(idx)
         i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        println(Base.summarysize(ct_f))
+        println(idx, " ", Sys.maxrss() / 1024^2, " MB")
+        # println(varinfo())
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -33,6 +39,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             return O, sv_arr, max_bond
         else
             EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
+            ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
             return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     else
@@ -75,6 +82,11 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
                           p_ctrl::Float64, p_proj::Float64, p_value::Float64, realization::Int, 
                           args::Dict, ancilla::Int)
     
+    # Delete file if it exists to ensure clean overwrite
+    if isfile(filename)
+        rm(filename)
+    end
+
     # Determine if we need to create or append to file
     file_mode = isfile(filename) ? "r+" : "cw"
     h5open(filename, file_mode) do file
@@ -343,8 +355,8 @@ function main()
     
     # Choose storage format based on command line argument
     store_singular_values = args["store_sv"]
-    println("store_singular_values: ", store_singular_values)
-    println("random: ", args["random"])
+    # println("store_singular_values: ", store_singular_values)
+    # println("random: ", args["random"])
     if store_singular_values
         # Use HDF5 format for large singular value arrays
         filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).h5"
