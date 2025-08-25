@@ -84,10 +84,10 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
                           p_ctrl::Float64, p_proj::Float64, p_value::Float64, realization::Int, 
                           args::Dict, ancilla::Int)
     
-    # Delete file if it exists to ensure clean overwrite
-    if isfile(filename)
-        rm(filename)
-    end
+    # # Delete file if it exists to ensure clean overwrite
+    # if isfile(filename)
+    #     rm(filename)
+    # end
 
     # Determine if we need to create or append to file
     file_mode = isfile(filename) ? "r+" : "cw"
