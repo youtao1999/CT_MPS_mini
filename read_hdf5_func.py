@@ -44,28 +44,6 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: boo
 
     return SvN
 
-def postprocessing(sv_combined="/scratch/ty296/hdf5_data_combined/sv_combined.h5", dir_name='/scratch/ty296/hdf5_data/p_ctrl0.4'):
-    h5_files = glob.glob(os.path.join(dir_name, '*.h5'))
-    with h5py.File(sv_combined, 'w') as f_combined:
-        counter = 0
-        for file in tqdm.tqdm(h5_files):
-            with h5py.File(file, 'r') as f:
-                metadata = f['metadata']
-                singular_values = f['singular_values']
-                for result_group in metadata.keys():
-                    counter += 1
-                    p_proj = metadata[result_group]['p_proj'][()]
-                    p_ctrl = metadata[result_group]['p_ctrl'][()]
-                    L = metadata[result_group]['args']['L'][()]
-                    maxbond = metadata[result_group]['max_bond'][()]
-                    sv_arr = singular_values[result_group][()]
-                    group_name = f'real{counter}'
-                    grp = f_combined.create_dataset(group_name, data=sv_arr)
-                    grp.attrs['p_proj'] = p_proj
-                    grp.attrs['p_ctrl'] = p_ctrl
-                    grp.attrs['L'] = L
-                    grp.attrs['maxbond'] = maxbond
-
 def calculate_mean_and_error(ee_values: List[float]) -> Tuple[float, float]:
     """Calculate mean and standard error of the mean."""
     ee_array = np.array(ee_values)
@@ -82,100 +60,133 @@ def calculate_variance_and_error(ee_values: List[float]) -> Tuple[float, float]:
     se_var = variance * np.sqrt(2.0 / (n - 1))
     return variance, se_var
 
-def h5_to_csv(hdf5_combined, n, threshold, save_folder = '/scratch/ty296/plots'):
-    with h5py.File(hdf5_combined, 'r') as f:
-        from collections import defaultdict
-        groups = defaultdict(list)
-        for real_key in tqdm.tqdm(f.keys()):
-            s0 = von_neumann_entropy_sv(f[real_key][()], n=n, positivedefinite=False, threshold=threshold)
-            # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
-            key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
-            groups[key_val].append(s0)
+
+class Postprocessing:
+    def __init__(self, p_fixed_name='p_ctrl', p_fixed_value=0.4, n=0, threshold=1e-16):
+        self.p_fixed_name = p_fixed_name
+        self.p_fixed_value = p_fixed_value
+        self.n = n
+        self.threshold = threshold
+        self.sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value)
+        self.dir_name = "/scratch/ty296/hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value)
+        self.save_folder = '/scratch/ty296/plots'
+        self.csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{self.threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
+
+    def postprocessing(self):
+        h5_files = glob.glob(os.path.join(self.dir_name, '*.h5'))
+        with h5py.File(self.sv_combined, 'w') as f_combined:
+            counter = 0
+            for file in tqdm.tqdm(h5_files):
+                with h5py.File(file, 'r') as f:
+                    metadata = f['metadata']
+                    singular_values = f['singular_values']
+                    for result_group in metadata.keys():
+                        counter += 1
+                        p_proj = metadata[result_group]['p_proj'][()]
+                        p_ctrl = metadata[result_group]['p_ctrl'][()]
+                        L = metadata[result_group]['args']['L'][()]
+                        maxbond = metadata[result_group]['max_bond'][()]
+                        sv_arr = singular_values[result_group][()]
+                        group_name = f'real{counter}'
+                        grp = f_combined.create_dataset(group_name, data=sv_arr)
+                        grp.attrs['p_proj'] = p_proj
+                        grp.attrs['p_ctrl'] = p_ctrl
+                        grp.attrs['L'] = L
+                        grp.attrs['maxbond'] = maxbond
+
+    def h5_to_csv(self):
+        with h5py.File(self.sv_combined, 'r') as f:
+            from collections import defaultdict
+            groups = defaultdict(list)
+            for real_key in tqdm.tqdm(f.keys()):
+                s0 = von_neumann_entropy_sv(f[real_key][()], n=self.n, positivedefinite=False, threshold=self.threshold)
+                # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
+                key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
+                groups[key_val].append(s0)
+            
+
+            data = []
+            for key_val, s0_list in groups.items():
+                mean, sem = calculate_mean_and_error(s0_list)
+                variance, se_var = calculate_variance_and_error(s0_list)
+                # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
+                data.append(list(key_val) + [mean, sem, variance, se_var])
+            # print(data)
+
+            df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var'])
+            # save the data to a csv file
+            df.to_csv(self.csv_path, index=False)
+
+            return df
+
+    def plot_from_csv(self):
+        """
+        Plot p_proj vs mean±sem and p_proj vs variance±se_var from CSV file
+        CSV should have columns: L, p_ctrl, p_proj, mean, sem, variance, se_var
+        """
+        import matplotlib.pyplot as plt
+        import numpy as np
         
-
-        data = []
-        for key_val, s0_list in groups.items():
-            mean, sem = calculate_mean_and_error(s0_list)
-            variance, se_var = calculate_variance_and_error(s0_list)
-            # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
-            data.append(list(key_val) + [mean, sem, variance, se_var])
-        # print(data)
-
-        df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var'])
-        # save the data to a csv file
-        csv_path = os.path.join(save_folder, f's{n}_threshold{threshold:.1e}.csv')
-        df.to_csv(csv_path, index=False)
-
-        return df, csv_path
-
-def plot_from_csv(csv_path):
-    """
-    Plot p_proj vs mean±sem and p_proj vs variance±se_var from CSV file
-    CSV should have columns: L, p_ctrl, p_proj, mean, sem, variance, se_var
-    """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    
-    # Read CSV data
-    df = pd.read_csv(csv_path)
-    
-    # Organize data by L values
-    plot_data = {}
-    for _, row in df.iterrows():
-        L = row['L']
-        if L not in plot_data:
-            plot_data[L] = {'p_proj': [], 'mean': [], 'sem': [], 'variance': [], 'se_var': []}
+        # Read CSV data
+        df = pd.read_csv(self.csv_path)
         
-        plot_data[L]['p_proj'].append(row['p_proj'])
-        plot_data[L]['mean'].append(row['mean'])
-        plot_data[L]['sem'].append(row['sem'])
-        plot_data[L]['variance'].append(row['variance'])
-        plot_data[L]['se_var'].append(row['se_var'])
+        # Organize data by L values
+        plot_data = {}
+        for _, row in df.iterrows():
+            L = row['L']
+            if L not in plot_data:
+                plot_data[L] = {'p_proj': [], 'mean': [], 'sem': [], 'variance': [], 'se_var': []}
+            
+            plot_data[L]['p_proj'].append(row['p_proj'])
+            plot_data[L]['mean'].append(row['mean'])
+            plot_data[L]['sem'].append(row['sem'])
+            plot_data[L]['variance'].append(row['variance'])
+            plot_data[L]['se_var'].append(row['se_var'])
 
-    # Create plots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        # Create plots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
-    # Plot 1: p_proj vs mean ± sem
-    for L in sorted(plot_data.keys()):
-        data = plot_data[L]
-        # Sort by p_proj for cleaner lines
-        sorted_indices = np.argsort(data['p_proj'])
-        p_proj_sorted = np.array(data['p_proj'])[sorted_indices]
-        mean_sorted = np.array(data['mean'])[sorted_indices]
-        sem_sorted = np.array(data['sem'])[sorted_indices]
-        
-        ax1.errorbar(p_proj_sorted, mean_sorted, yerr=sem_sorted, 
-                    label=f'L={L}', marker='o', capsize=5, capthick=2)
+        # Plot 1: p_proj vs mean ± sem
+        for L in sorted(plot_data.keys()):
+            data = plot_data[L]
+            # Sort by p_proj for cleaner lines
+            sorted_indices = np.argsort(data['p_proj'])
+            p_proj_sorted = np.array(data['p_proj'])[sorted_indices]
+            mean_sorted = np.array(data['mean'])[sorted_indices]
+            sem_sorted = np.array(data['sem'])[sorted_indices]
+            
+            ax1.errorbar(p_proj_sorted, mean_sorted, yerr=sem_sorted, 
+                        label=f'L={L}', marker='o', capsize=5, capthick=2)
 
-    ax1.set_xlabel('p_proj')
-    ax1.set_ylabel('Mean Entropy ± SEM')
-    ax1.set_title('Mean Entropy vs p_proj for Different L')
-    ax1.legend()
-    ax1.set_xlim(0.5, 1.0)
-    ax1.grid(True, alpha=0.3)
+        ax1.set_xlabel('p_proj')
+        ax1.set_ylabel('Mean Entropy ± SEM')
+        ax1.set_title('Mean Entropy vs p_proj for Different L')
+        ax1.legend()
+        ax1.set_xlim(0.0, 1.0)
+        ax1.grid(True, alpha=0.3)
 
-    # Plot 2: p_proj vs variance ± se_var
-    for L in sorted(plot_data.keys()):
-        data = plot_data[L]
-        # Sort by p_proj for cleaner lines
-        sorted_indices = np.argsort(data['p_proj'])
-        p_proj_sorted = np.array(data['p_proj'])[sorted_indices]
-        variance_sorted = np.array(data['variance'])[sorted_indices]
-        se_var_sorted = np.array(data['se_var'])[sorted_indices]
-        
-        ax2.errorbar(p_proj_sorted, variance_sorted, yerr=se_var_sorted, 
-                    label=f'L={L}', marker='s', capsize=5, capthick=2)
+        # Plot 2: p_proj vs variance ± se_var
+        for L in sorted(plot_data.keys()):
+            data = plot_data[L]
+            # Sort by p_proj for cleaner lines
+            sorted_indices = np.argsort(data['p_proj'])
+            p_proj_sorted = np.array(data['p_proj'])[sorted_indices]
+            variance_sorted = np.array(data['variance'])[sorted_indices]
+            se_var_sorted = np.array(data['se_var'])[sorted_indices]
+            
+            ax2.errorbar(p_proj_sorted, variance_sorted, yerr=se_var_sorted, 
+                        label=f'L={L}', marker='s', capsize=5, capthick=2)
 
-    ax2.set_xlabel('p_proj')
-    ax2.set_ylabel('Variance ± SE')
-    ax2.set_title('Variance vs p_proj for Different L')
-    ax2.legend()
-    ax2.set_xlim(0.5, 1.0)
-    ax2.grid(True, alpha=0.3)
+        ax2.set_xlabel('p_proj')
+        ax2.set_ylabel('Variance ± SE')
+        ax2.set_title('Variance vs p_proj for Different L')
+        ax2.legend()
+        ax2.set_xlim(0.0, 1.0)
+        ax2.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.savefig(f'/scratch/ty296/plots/s{n}_threshold{threshold:.1e}.png')
-    # plt.show()
+        plt.tight_layout()
+        plt.savefig(f'/scratch/ty296/plots/s{self.n}_threshold{self.threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
+        # plt.show()
 
 
 # %%
@@ -183,15 +194,16 @@ def plot_from_csv(csv_path):
 # First generate CSV using h5_to_csv function:
 
 if __name__ == "__main__":
-    sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined.h5"
-    dir_name = '/scratch/ty296/hdf5_data/p_ctrl0.4'
-    save_folder = '/scratch/ty296/plots'
-    n = 0
-    # postprocessing(sv_combined, dir_name) # once run this once to combine all the hdf5 files
 
-    for threshold in np.logspace(-5, -1, 10):
-        df, csv_path = h5_to_csv(sv_combined, n=0, threshold=threshold, save_folder=save_folder)
-        plot_from_csv(csv_path)
+    p_fixed_name = 'p_ctrl'
+    p_fixed_value = 0.0
+    n = 0
+    for threshold in np.logspace(-16, 0, 17):
+        postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold) 
+
+        # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
+        # postprocessing.h5_to_csv()
+        postprocessing.plot_from_csv()
 
 
 
