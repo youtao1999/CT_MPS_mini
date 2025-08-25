@@ -15,7 +15,6 @@ using ArgParse
 using Serialization
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
-    println("initial memory: ", Sys.maxrss() / 1024^2, " MB")
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
     initial_state = copy(ct_f.mps)
     initial_maxdim = CT.max_bond_dim(ct_f.mps)
@@ -23,12 +22,15 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     i=1
     # T_max = 100
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
-    println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
+    # println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
     for idx in 1:T_max
         # println(idx)
+        before = Sys.maxrss()
         i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        println(Base.summarysize(ct_f))
-        println(idx, " ", Sys.maxrss() / 1024^2, " MB")
+        after = Sys.maxrss()
+        # println(Base.summarysize(ct_f.adder))
+        # println(Base.summarysize(ct_f.mps))
+        println(idx, " maxrss: ", after / 1024^2, " MB, current used: ", (after - before) / 1024^2, " MB")
         # println(varinfo())
     end
     O=CT.order_parameter(ct_f)
