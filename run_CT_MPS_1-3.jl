@@ -25,12 +25,12 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     # println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
     for idx in 1:T_max
         # println(idx)
-        before = Sys.maxrss()
+        # before = Sys.maxrss()
         i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
         after = Sys.maxrss()
         # println(Base.summarysize(ct_f.adder))
         # println(Base.summarysize(ct_f.mps))
-        println(idx, " maxrss: ", after / 1024^2, " MB, current used: ", (after - before) / 1024^2, " MB")
+        println(idx, " maxrss: ", after / 1024^2, " MB")
         # println(varinfo())
     end
     O=CT.order_parameter(ct_f)
