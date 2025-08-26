@@ -6,11 +6,11 @@ import h5py
 import glob
 import os
 import tqdm
-from typing import Dict, List, Tuple, Optional
+from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: bool = False, threshold: float = 1e-16) -> float:
+def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, threshold: float) -> float:
     """
     Compute von Neumann entropy from singular values.
     
@@ -64,11 +64,12 @@ def calculate_variance_and_error(sv_values: List[float]) -> Tuple[float, float]:
 
 
 class Postprocessing:
-    def __init__(self, p_fixed_name='p_ctrl', p_fixed_value=0.4, n=0, threshold=1e-16):
+    def __init__(self, p_fixed_name: str, p_fixed_value: float, n: int, threshold: float):
         self.p_fixed_name = p_fixed_name
         self.p_fixed_value = p_fixed_value
         self.n = n
         self.threshold = threshold
+        print("p_fixed_name", self.p_fixed_name, "p_fixed_value", self.p_fixed_value, "n", self.n, "threshold", self.threshold)
         self.sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value)
         self.dir_name = "/scratch/ty296/hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value)
         self.save_folder = '/scratch/ty296/plots'
@@ -200,13 +201,13 @@ if __name__ == "__main__":
     p_fixed_name = 'p_ctrl'
     p_fixed_value = 0.0
     n = 0
-    for threshold in np.logspace(-16, 0, 17):
+    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold=1e-16) 
+    postprocessing.postprocessing()
+
+    for threshold in np.logspace(-15, -5, 10):
         postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold) 
+        print(threshold)
 
-        # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
-        # postprocessing.h5_to_csv()
-        postprocessing.plot_from_csv()
-
-
-
-
+    #     # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
+    #     postprocessing.h5_to_csv()
+    #     postprocessing.plot_from_csv()
