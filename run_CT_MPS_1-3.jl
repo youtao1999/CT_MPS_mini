@@ -30,7 +30,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
         after = Sys.maxrss()
         # println(Base.summarysize(ct_f.adder))
         # println(Base.summarysize(ct_f.mps))
-        println(idx, " maxrss: ", after / 1024^2, " MB")
+        println(idx, " maxrss: ", after / 1024^2, " MB", " maxbond: ", CT.max_bond_dim(ct_f.mps))
         # println(varinfo())
     end
     O=CT.order_parameter(ct_f)
@@ -38,10 +38,11 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     if ancilla ==0 
         if sv
             sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv)
+            println(length(sv_arr))
             return O, sv_arr, max_bond
         else
             EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
-            ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
+            # ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
             return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     else
