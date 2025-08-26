@@ -326,7 +326,7 @@ function parse_my_args()
         help = "set the maximal bond dim"
         "--cutoff", "-c"
         arg_type = Float64
-        default = 1e-10
+        default = 1e-15
         help = "set the cutoff"
         "--n_chunk_realizations", "-n"
         arg_type = Int
@@ -354,6 +354,15 @@ function main()
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
+    println("p_range: ", p_range)
+    println("p_fixed_name: ", p_fixed_name)
+    println("p_fixed_value: ", p_fixed_value)
+    println("L: ", args["L"])
+    println("ancilla: ", args["ancilla"])
+    println("maxdim: ", args["maxdim"])
+    println("cutoff: ", args["cutoff"])
+    println("n_chunk_realizations: ", args["n_chunk_realizations"])
+    
     
     # Choose storage format based on command line argument
     store_singular_values = args["store_sv"]

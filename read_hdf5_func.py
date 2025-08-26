@@ -44,21 +44,23 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int = 1, positivedefinite: boo
 
     return SvN
 
-def calculate_mean_and_error(ee_values: List[float]) -> Tuple[float, float]:
+def calculate_mean_and_error(sv_values: List[float]) -> Tuple[float, float]:
     """Calculate mean and standard error of the mean."""
-    ee_array = np.array(ee_values)
-    mean = np.mean(ee_array)
-    sem = np.std(ee_array, ddof=1) / np.sqrt(len(ee_array))
+    sv_array = np.array(sv_values)
+    mean = np.mean(sv_array)
+    sem = np.std(sv_array, ddof=1) / np.sqrt(len(sv_array))
     return mean, sem
 
-def calculate_variance_and_error(ee_values: List[float]) -> Tuple[float, float]:
+def calculate_variance_and_error(sv_values: List[float]) -> Tuple[float, float]:
     """Calculate variance and standard error of variance."""
-    ee_array = np.array(ee_values)
-    variance = np.var(ee_array, ddof=1)
-    # Standard error of variance approximation
-    n = len(ee_array)
-    se_var = variance * np.sqrt(2.0 / (n - 1))
-    return variance, se_var
+    sv_array = np.array(sv_values)
+    mean = np.mean(sv_array)
+    var = np.var(sv_array, ddof=1)
+
+    deviations = sv_array - mean
+    fourth_moment = np.mean(deviations**4)
+    se_var = (1/len(sv_array)) * (fourth_moment - (len(sv_array)-3)/(len(sv_array)-1) * var**2)
+    return var, se_var
 
 
 class Postprocessing:
@@ -121,7 +123,7 @@ class Postprocessing:
 
     def plot_from_csv(self):
         """
-        Plot p_proj vs mean±sem and p_proj vs variance±se_var from CSV file
+        Plot p_proj vs mean±SEM and p_proj vs variance±SEVAR from CSV file
         CSV should have columns: L, p_ctrl, p_proj, mean, sem, variance, se_var
         """
         import matplotlib.pyplot as plt
@@ -178,7 +180,7 @@ class Postprocessing:
                         label=f'L={L}', marker='s', capsize=5, capthick=2)
 
         ax2.set_xlabel('p_proj')
-        ax2.set_ylabel('Variance ± SE')
+        ax2.set_ylabel('Variance ± SEVar')
         ax2.set_title('Variance vs p_proj for Different L')
         ax2.legend()
         ax2.set_xlim(0.0, 1.0)

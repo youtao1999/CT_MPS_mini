@@ -325,4 +325,4 @@ nohup bash -c 'while true; do ps -o rss= -p 20564 | awk -v ts=$(date +%s) "{prin
 # Run directly if already on compute node
 /scratch/ty296/CT_MPS_mini/mini_memory_benchmark.sh --direct --L 8 --n-chunk-realizations 5
 
-/scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=24 --P_RANGE="0.0:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=50 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=100G
+/scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=16 --P_RANGE="0.0:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=50 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=40G
