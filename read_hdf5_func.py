@@ -149,8 +149,32 @@ class Postprocessing:
         # Create plots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
+        # Get sorted L values and create color map
+        L_values = sorted(plot_data.keys())
+        n_L = len(L_values)
+        
+        # Create increasingly deeper shades of blue proportional to L value
+        # Smaller L = very light blue, larger L = darker blue
+        colors = []
+        min_L = min(L_values)
+        max_L = max(L_values)
+        
+        for L in L_values:
+            # Normalize L to range [0, 1]
+            norm_L = (L - min_L) / (max_L - min_L)
+            
+            # Create light blue to dark blue gradient
+            # Light blue: (0.7, 0.7, 1.0), Dark blue: (0.0, 0.0, 0.8)
+            red = 0.7 * (1 - norm_L)      # From 0.7 to 0.0
+            green = 0.7 * (1 - norm_L)    # From 0.7 to 0.0  
+            blue = 1.0 - 0.2 * norm_L     # From 1.0 to 0.8
+            
+            blue_color = (red, green, blue)
+            
+            colors.append(blue_color)
+
         # Plot 1: p_proj vs mean ± sem
-        for L in sorted(plot_data.keys()):
+        for i, L in enumerate(L_values):
             data = plot_data[L]
             # Sort by p_proj for cleaner lines
             sorted_indices = np.argsort(data['p_proj'])
@@ -159,7 +183,7 @@ class Postprocessing:
             sem_sorted = np.array(data['sem'])[sorted_indices]
             
             ax1.errorbar(p_proj_sorted, mean_sorted, yerr=sem_sorted, 
-                        label=f'L={L}', marker='o', capsize=5, capthick=2)
+                        label=f'L={L}', marker='o', capsize=5, capthick=2, color=colors[i])
 
         ax1.set_xlabel('p_proj')
         ax1.set_ylabel('Mean Entropy ± SEM')
@@ -169,7 +193,7 @@ class Postprocessing:
         ax1.grid(True, alpha=0.3)
 
         # Plot 2: p_proj vs variance ± se_var
-        for L in sorted(plot_data.keys()):
+        for i, L in enumerate(L_values):
             data = plot_data[L]
             # Sort by p_proj for cleaner lines
             sorted_indices = np.argsort(data['p_proj'])
@@ -178,7 +202,7 @@ class Postprocessing:
             se_var_sorted = np.array(data['se_var'])[sorted_indices]
             
             ax2.errorbar(p_proj_sorted, variance_sorted, yerr=se_var_sorted, 
-                        label=f'L={L}', marker='s', capsize=5, capthick=2)
+                        label=f'L={L}', marker='s', capsize=5, capthick=2, color=colors[i])
 
         ax2.set_xlabel('p_proj')
         ax2.set_ylabel('Variance ± SEVar')
@@ -209,5 +233,5 @@ if __name__ == "__main__":
         print(threshold)
 
         # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
-        postprocessing.h5_to_csv(threshold)
+        # postprocessing.h5_to_csv(threshold)
         postprocessing.plot_from_csv(threshold)
