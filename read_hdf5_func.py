@@ -64,16 +64,14 @@ def calculate_variance_and_error(sv_values: List[float]) -> Tuple[float, float]:
 
 
 class Postprocessing:
-    def __init__(self, p_fixed_name: str, p_fixed_value: float, n: int, threshold: float):
+    def __init__(self, p_fixed_name: str, p_fixed_value: float, n: int):
         self.p_fixed_name = p_fixed_name
         self.p_fixed_value = p_fixed_value
         self.n = n
-        self.threshold = threshold
-        print("p_fixed_name", self.p_fixed_name, "p_fixed_value", self.p_fixed_value, "n", self.n, "threshold", self.threshold)
+        print("p_fixed_name", self.p_fixed_name, "p_fixed_value", self.p_fixed_value, "n", self.n)
         self.sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value)
         self.dir_name = "/scratch/ty296/hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value)
         self.save_folder = '/scratch/ty296/plots'
-        self.csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{self.threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
 
     def postprocessing(self):
         h5_files = glob.glob(os.path.join(self.dir_name, '*.h5'))
@@ -97,12 +95,12 @@ class Postprocessing:
                         grp.attrs['L'] = L
                         grp.attrs['maxbond'] = maxbond
 
-    def h5_to_csv(self):
+    def h5_to_csv(self, threshold: float):
         with h5py.File(self.sv_combined, 'r') as f:
             from collections import defaultdict
             groups = defaultdict(list)
             for real_key in tqdm.tqdm(f.keys()):
-                s0 = von_neumann_entropy_sv(f[real_key][()], n=self.n, positivedefinite=False, threshold=self.threshold)
+                s0 = von_neumann_entropy_sv(f[real_key][()], n=self.n, positivedefinite=False, threshold=threshold)
                 # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
                 key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
                 groups[key_val].append(s0)
@@ -118,11 +116,12 @@ class Postprocessing:
 
             df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var'])
             # save the data to a csv file
-            df.to_csv(self.csv_path, index=False)
+            csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
+            df.to_csv(csv_path, index=False)
 
             return df
 
-    def plot_from_csv(self):
+    def plot_from_csv(self, threshold: float):
         """
         Plot p_proj vs mean±SEM and p_proj vs variance±SEVAR from CSV file
         CSV should have columns: L, p_ctrl, p_proj, mean, sem, variance, se_var
@@ -131,7 +130,8 @@ class Postprocessing:
         import numpy as np
         
         # Read CSV data
-        df = pd.read_csv(self.csv_path)
+        csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
+        df = pd.read_csv(csv_path)
         
         # Organize data by L values
         plot_data = {}
@@ -188,7 +188,7 @@ class Postprocessing:
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plt.savefig(f'/scratch/ty296/plots/s{self.n}_threshold{self.threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
+        plt.savefig(f'/scratch/ty296/plots/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
         # plt.show()
 
 
@@ -201,13 +201,13 @@ if __name__ == "__main__":
     p_fixed_name = 'p_ctrl'
     p_fixed_value = 0.0
     n = 0
-    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold=1e-16) 
-    postprocessing.postprocessing()
+    # postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold=1e-16) 
+    # postprocessing.postprocessing()
 
     for threshold in np.logspace(-15, -5, 10):
-        postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold) 
+        postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n) 
         print(threshold)
 
-    #     # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
-    #     postprocessing.h5_to_csv()
-    #     postprocessing.plot_from_csv()
+        # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
+        postprocessing.h5_to_csv(threshold)
+        postprocessing.plot_from_csv(threshold)

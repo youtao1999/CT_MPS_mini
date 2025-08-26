@@ -322,7 +322,7 @@ function parse_my_args()
         help = "number of ancilla"
         "--maxdim", "-m"
         arg_type = Int
-        default = 10
+        default = 64  # Will be calculated as 2^(L/2) if not provided
         help = "set the maximal bond dim"
         "--cutoff", "-c"
         arg_type = Float64
@@ -351,6 +351,12 @@ function main()
     println("Uses threads: ",BLAS.get_num_threads())
     println("Uses backends: ",BLAS.get_config())
     args = parse_my_args()
+    
+    # Calculate maxdim = 2^(L/2) if default value is being used
+    if args["maxdim"] == 64  # Default value we set
+        args["maxdim"] = 2^div(args["L"], 2)
+    end
+    
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]

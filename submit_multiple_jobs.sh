@@ -8,6 +8,9 @@ SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.slurm"
 
 # Set default values
 : ${MEMORY:=4G}  # Default memory if not specified
+: ${CUTOFF:=1e-15}  # Default cutoff if not specified
+: ${N_CHUNK_REALIZATIONS:=1}  # Default chunk realizations if not specified
+: ${MAXDIM:=64}  # Default maxdim if not specified (will be recalculated in Julia based on L)
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
