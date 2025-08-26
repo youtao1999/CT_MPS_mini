@@ -1415,6 +1415,7 @@ function mpo_to_mps(mps::MPS,site::Vector{Index{Int64}},trace_idx::Set{Int64};pi
 end
 
 function von_Neumann_entropy(mps::MPS, i::Int; n::Int=1,positivedefinite=false,threshold::Float64=1e-16,sv=false)
+    println("from SvN, n=$n, threshold=$threshold")
     mps_ = orthogonalize(mps, i)
     _, S = svd(mps_[i], (linkind(mps_, i),))
     if sv
