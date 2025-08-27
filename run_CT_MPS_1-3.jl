@@ -26,19 +26,29 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     for idx in 1:T_max
         # println(idx)
         # before = Sys.maxrss()
+        @allocated begin
         i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        end
         after = Sys.maxrss()
         # println(Base.summarysize(ct_f.adder))
         # println(Base.summarysize(ct_f.mps))
         println(idx, " maxrss: ", after / 1024^2, " MB", " maxbond: ", CT.max_bond_dim(ct_f.mps))
+        # mps_ = orthogonalize(ct_f.mps, div(ct_f.L,2))
+        # _, S = svd(mps_[div(ct_f.L,2)], (linkind(mps_, div(ct_f.L,2)),); cutoff=ct_f._cutoff)
+        # println("sv cutoff: ", ct_f._cutoff)
+        # println("lower bound sv: ", S[end])
+        if idx % 20 == 0
+            GC.gc()
+            println("GC.gc()")
+        end
         # println(varinfo())
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
         if sv
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv)
-            println(length(sv_arr))
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv,threshold=ct_f._cutoff,positivedefinite=false,n=n)
+            # println(length(sv_arr), "lower bound sv: ", sv_arr[end])
             return O, sv_arr, max_bond
         else
             EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
@@ -82,8 +92,8 @@ Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
 """
 function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entropy_data, max_bond::Int, 
-                          p_ctrl::Float64, p_proj::Float64, p_value::Float64, realization::Int, 
-                          args::Dict, ancilla::Int)
+                          p_ctrl::Float64, p_proj::Float64, realization::Int, 
+                          args::Dict, seed::Int)
     
     # # Delete file if it exists to ensure clean overwrite
     # if isfile(filename)
@@ -110,10 +120,9 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
         meta_group["max_bond"] = max_bond
         meta_group["p_ctrl"] = p_ctrl
         meta_group["p_proj"] = p_proj
-        meta_group["p_value"] = p_value
         meta_group["realization"] = realization
-        meta_group["ancilla"] = ancilla
-        
+        meta_group["seed"] = seed
+
         # Store args
         args_group = create_group(meta_group, "args")
         for (key, value) in args
@@ -399,7 +408,7 @@ function main()
                 
                 # Store result directly to HDF5
                 store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
-                                p_ctrl, p_proj, p, i, args, args["ancilla"])
+                                p_ctrl, p_proj, i, args, seed)
                 
                 println("Stored result $result_count to HDF5")
             end
@@ -428,7 +437,7 @@ function main()
                     
                     # Get results as dictionary (scalar entropy only)
                     results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
-                    data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization number" => i))
+                    data_to_serialize = merge(results, Dict("args" => args, "realization number" => i))
                     
                     # Write each result as a separate line (JSON Lines format)
                     println(f, JSON.json(data_to_serialize))

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=CT_MPS_L${L}_MAXDIM${MAXDIM}_CUTOFF${CUTOFF}_P_FIXED_NAME${P_FIXED_NAME}_P_FIXED_VALUE${P_FIXED_VALUE}_ANCILLA${ANCILLA}    # Job name with L parameter
+#SBATCH --job-name=CT_MPS   # Job name with L parameter
 #SBATCH --ntasks=6                # Number of tasks (processes)
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
 #SBATCH --time=06:00:00            # Time limit hrs:min:sec
@@ -23,6 +23,7 @@ export JULIA_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+
 # Debug: Print all variables
 echo "=== DEBUG: Variable values ==="
 echo "L=$L"

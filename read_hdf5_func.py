@@ -72,29 +72,50 @@ class Postprocessing:
         self.sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value)
         self.dir_name = "/scratch/ty296/hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value)
         self.save_folder = '/scratch/ty296/plots'
+        self.counter = 0
 
     def postprocessing(self):
         h5_files = glob.glob(os.path.join(self.dir_name, '*.h5'))
         with h5py.File(self.sv_combined, 'w') as f_combined:
-            counter = 0
             for file in tqdm.tqdm(h5_files):
                 with h5py.File(file, 'r') as f:
                     metadata = f['metadata']
                     singular_values = f['singular_values']
                     for result_group in metadata.keys():
-                        counter += 1
+                        self.counter += 1
                         p_proj = metadata[result_group]['p_proj'][()]
                         p_ctrl = metadata[result_group]['p_ctrl'][()]
                         L = metadata[result_group]['args']['L'][()]
+                        seed = metadata[result_group]['seed'][()]
+                        # Print all attributes in args group
+                        args_group = metadata[result_group]['args']
+                        maxdim = args_group['maxdim'][()]
+                        n_chunk_realizations = args_group['n_chunk_realizations'][()]
+                        
+                        # View all keys/attributes in args_group
+                        print(f"Args group keys: {list(args_group.keys())}")
+
+                        # Access specific values (example with L)
+                        L = args_group['L'][()]
+                        print(f"L value: {L}")
+                        
+                        # You can also iterate through all items
+                        for key in args_group.keys():
+                            value = args_group[key][()]
+                            print(f"  {key}: {value}")
+                        
                         maxbond = metadata[result_group]['max_bond'][()]
                         sv_arr = singular_values[result_group][()]
-                        group_name = f'real{counter}'
+                        group_name = f'real{self.counter}'
                         grp = f_combined.create_dataset(group_name, data=sv_arr)
                         grp.attrs['p_proj'] = p_proj
                         grp.attrs['p_ctrl'] = p_ctrl
                         grp.attrs['L'] = L
                         grp.attrs['maxbond'] = maxbond
-
+                        grp.attrs['maxdim'] = maxdim
+                        grp.attrs['n_chunk_realizations'] = n_chunk_realizations
+                        grp.attrs['seed'] = seed
+                        
     def h5_to_csv(self, threshold: float):
         with h5py.File(self.sv_combined, 'r') as f:
             from collections import defaultdict
@@ -105,9 +126,10 @@ class Postprocessing:
                 key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
                 groups[key_val].append(s0)
             
-
             data = []
             for key_val, s0_list in groups.items():
+                ensemble_size = len(s0_list)
+                print(f'key_val {key_val} ensemble_size {ensemble_size}')
                 mean, sem = calculate_mean_and_error(s0_list)
                 variance, se_var = calculate_variance_and_error(s0_list)
                 # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
@@ -118,6 +140,7 @@ class Postprocessing:
             # save the data to a csv file
             csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
             df.to_csv(csv_path, index=False)
+            print(f'threadhold {threshold} saved to {csv_path}')
 
             return df
 
@@ -213,6 +236,8 @@ class Postprocessing:
 
         plt.tight_layout()
         plt.savefig(f'/scratch/ty296/plots/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
+        plt.close()
+        print(f'threshold {threshold} saved to /scratch/ty296/plots/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
         # plt.show()
 
 
@@ -225,13 +250,10 @@ if __name__ == "__main__":
     p_fixed_name = 'p_ctrl'
     p_fixed_value = 0.0
     n = 0
-    # postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, threshold=1e-16) 
-    # postprocessing.postprocessing()
+    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n) 
+    postprocessing.postprocessing()
+    print(postprocessing.counter, 'realizations * num_p_values')
 
     for threshold in np.logspace(-15, -5, 10):
-        postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n) 
-        print(threshold)
-
-        # postprocessing.postprocessing() # once run this once to combine all the hdf5 files
-        # postprocessing.h5_to_csv(threshold)
+        postprocessing.h5_to_csv(threshold)
         postprocessing.plot_from_csv(threshold)
