@@ -74,13 +74,14 @@ function CT_MPS(
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
     mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_cutoff,_maxdim0)
+    println(typeof(qubit_site))
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
     ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, _eps, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _cutoff, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
     return ct
 end
 
-function _initialize_basis(L,ancilla,folded)
+function _initialize_basis(L::Int,ancilla::Int,folded::Bool)
 
     qubit_site = siteinds("Qubit", L+ancilla) # RAM site index
     # ram_phy[actual in ram] = physical 
@@ -104,7 +105,7 @@ function _initialize_basis(L,ancilla,folded)
     return qubit_site, ram_phy, phy_ram, phy_list
 end
 
-function _initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_cutoff,_maxdim0)
+function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational{BigInt},Nothing},folded::Bool,qubit_site::Vector{Index{Int64}},ram_phy::Vector{Int},phy_ram::Vector{Int},phy_list::Vector{Int},rng_vec::Random.AbstractRNG,_cutoff::Float64,_maxdim0::Int)
     if ancilla == 0
         if x0 !== nothing
             vec_int = dec2bin(x0, L)
@@ -181,7 +182,7 @@ end
 
 """ apply scrambler (Haar random unitary) to site (i,i+1) [physical index]
 """
-function S!(ct::CT_MPS, i::Int, rng; builtin=false, theta=nothing)
+function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; builtin=false, theta=nothing)
     # U=ITensor(1.)
     # U *= randomUnitary(linkind(mps,i), linkind(mps,i+1))
     # mps[i] *= U
@@ -553,7 +554,7 @@ end
 
 """create Haar random unitary
 """
-function U(n, rng::Random.AbstractRNG=MersenneTwister(nothing))
+function U(n::Int, rng::Random.AbstractRNG=MersenneTwister(nothing))
     z = randn(rng, n, n) + randn(rng, n, n) * im
     Q, R = qr(z)
     r_diag = diag(R)
@@ -588,7 +589,7 @@ If `CZ` is true, applied a CZ gate, otherwise, it is skipped.
 Here, 12 θ's are independently chosen as a random number in [0,2pi), and Rx and Rz are single qubit rotation gates along the x and z axes, respectively.
 For simplicity, we denote θ as θ[1], θ[2], ..., θ[6] on the top qubit, and θ[7], θ[8], ..., θ[12] on the bottom qubit. 
 """
-function U_simp(CZ, rng, 
+function U_simp(CZ::Bool, rng::Union{Nothing, Int, Random.AbstractRNG}, 
                 theta::Vector{Any}=nothing)
     if theta === nothing
         theta = rand(rng, 12) * 2 * pi
@@ -623,7 +624,7 @@ three Euler angles decomposition. [The global phase does not matter here]
           |
 ---U_21---CZ---U_22
 """
-function U2(CZ,rng::Random.AbstractRNG=MersenneTwister(nothing))
+function U2(CZ::Bool,rng::Random.AbstractRNG=MersenneTwister(nothing))
     U_11=U(2,rng)
     U_12=U(2,rng)
     U_21=U(2,rng)
