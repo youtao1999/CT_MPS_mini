@@ -37,7 +37,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
         # _, S = svd(mps_[div(ct_f.L,2)], (linkind(mps_, div(ct_f.L,2)),); cutoff=ct_f._cutoff)
         # println("sv cutoff: ", ct_f._cutoff)
         # println("lower bound sv: ", S[end])
-        if idx % 20 == 0
+        if idx % 80 == 0
             GC.gc()
             println("GC.gc()")
         end
@@ -79,7 +79,7 @@ function parse_p_range(p_range_str::String)
         start = parse(Float64, parts[1])
         stop = parse(Float64, parts[2])
         num = parse(Int, parts[3])
-        return range(start, stop, length=num) |> collect
+        return range(start, stop, length=num) |> collect |> reverse
     else
         # Format: "0.1,0.2,0.3"
         return parse.(Float64, split(p_range_str, ","))

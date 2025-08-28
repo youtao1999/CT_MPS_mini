@@ -92,17 +92,17 @@ class Postprocessing:
                         maxdim = args_group['maxdim'][()]
                         n_chunk_realizations = args_group['n_chunk_realizations'][()]
                         
-                        # View all keys/attributes in args_group
-                        print(f"Args group keys: {list(args_group.keys())}")
+                        # # View all keys/attributes in args_group
+                        # print(f"Args group keys: {list(args_group.keys())}")
 
-                        # Access specific values (example with L)
-                        L = args_group['L'][()]
-                        print(f"L value: {L}")
+                        # # Access specific values (example with L)
+                        # L = args_group['L'][()]
+                        # print(f"L value: {L}")
                         
-                        # You can also iterate through all items
-                        for key in args_group.keys():
-                            value = args_group[key][()]
-                            print(f"  {key}: {value}")
+                        # # You can also iterate through all items
+                        # for key in args_group.keys():
+                        #     value = args_group[key][()]
+                        #     print(f"  {key}: {value}")
                         
                         maxbond = metadata[result_group]['max_bond'][()]
                         sv_arr = singular_values[result_group][()]

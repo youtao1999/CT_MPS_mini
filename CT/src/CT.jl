@@ -799,7 +799,7 @@ function von_Neumann_entropy(mps::MPS, i::Int; n::Int=1,positivedefinite=false,t
     if positivedefinite
         p=max.(diag(S),threshold)
     else
-        p=max.(diag(S),threshold) .^2
+        p=max.(diag(S),threshold) .^ 2
     end
     if n==1
         SvN = -sum(p .* log.(p))

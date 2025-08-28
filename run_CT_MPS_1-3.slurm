@@ -2,7 +2,7 @@
 #SBATCH --job-name=CT_MPS   # Job name with L parameter
 #SBATCH --ntasks=6                # Number of tasks (processes)
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
-#SBATCH --time=06:00:00            # Time limit hrs:min:sec
+#SBATCH --time=10:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
 #SBATCH --partition=main
