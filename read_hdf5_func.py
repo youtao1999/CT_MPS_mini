@@ -1,6 +1,6 @@
 # %%
 import sys
-sys.path.append('/Users/youtao/code/CT_MPS_mini')
+sys.path.append('/scratch/ty296/CT_MPS_mini')
 # %%
 import h5py
 import glob
@@ -70,9 +70,12 @@ class Postprocessing:
         self.n = n
         self.pwd = pwd
         print("p_fixed_name", self.p_fixed_name, "p_fixed_value", self.p_fixed_value, "n", self.n)
-        self.sv_combined = os.join(self.pwd, "hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value))
-        self.dir_name = os.join(self.pwd, "{}{}".format(self.p_fixed_name, self.p_fixed_value))
-        self.save_folder = os.join(self.pwd, "plots")
+        self.sv_combined = os.path.join(self.pwd, "hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value))
+        print("sv_combined", self.sv_combined)
+        self.dir_name = os.path.join(self.pwd, "hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value))
+        print("dir_name", self.dir_name)
+        self.save_folder = os.path.join(self.pwd, "plots")
+        print("save_folder", self.save_folder)
         self.counter = 0
 
     def postprocessing(self):
@@ -87,7 +90,7 @@ class Postprocessing:
                         p_proj = metadata[result_group]['p_proj'][()]
                         p_ctrl = metadata[result_group]['p_ctrl'][()]
                         L = metadata[result_group]['args']['L'][()]
-                        # seed = metadata[result_group]['seed'][()]
+                        seed = metadata[result_group]['seed'][()]
                         # Print all attributes in args group
                         args_group = metadata[result_group]['args']
                         maxdim = args_group['maxdim'][()]
@@ -115,7 +118,7 @@ class Postprocessing:
                         grp.attrs['maxbond'] = maxbond
                         grp.attrs['maxdim'] = maxdim
                         grp.attrs['n_chunk_realizations'] = n_chunk_realizations
-                        # grp.attrs['seed'] = seed
+                        grp.attrs['seed'] = seed
                         
     def h5_to_csv(self, threshold: float):
         with h5py.File(self.sv_combined, 'r') as f:
@@ -254,10 +257,10 @@ if __name__ == "__main__":
     p_fixed_name = 'p_ctrl'
     p_fixed_value = 0.0
     n = 0
-    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, pwd="/Users/youtao/code") 
-    postprocessing.postprocessing()
+    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, pwd="/scratch/ty296") 
+    # postprocessing.postprocessing()
     print(postprocessing.counter, 'realizations * num_p_values')
 
-    # for threshold in np.logspace(-15, -5, 10):
-    #     postprocessing.h5_to_csv(threshold)
-    #     postprocessing.plot_from_csv(threshold)
+    for threshold in np.logspace(-15, -5, 10):
+        postprocessing.h5_to_csv(threshold)
+        postprocessing.plot_from_csv(threshold)
