@@ -131,7 +131,10 @@ class Postprocessing:
                 ensemble_size = len(s0_list)
                 print(f'key_val {key_val} ensemble_size {ensemble_size}')
                 mean, sem = calculate_mean_and_error(s0_list)
-                variance, se_var = calculate_variance_and_error(s0_list)
+                if len(s0_list) > 1:
+                    variance, se_var = calculate_variance_and_error(s0_list)
+                else:
+                    variance, se_var = 0, 0
                 # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
                 data.append(list(key_val) + [mean, sem, variance, se_var])
             # print(data)

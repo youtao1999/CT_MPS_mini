@@ -313,6 +313,25 @@ nohup bash -c 'while true; do ps -o rss=,vsz=,%mem= -p 20564 | awk -v ts="$(date
 # Run in background with timestamp in filename
 nohup bash -c 'while true; do ps -o rss= -p 20564 | awk -v ts=$(date +%s) "{print ts, \$1}" >> memory_log_$(date +%Y%m%d_%H%M%S).txt; sleep 1; done' &
 
+
+# sometimes that ssh agent would stop working, here is the fix:
+
+# Check if agent is running
+ps aux | grep ssh-agent | grep $(whoami)
+
+# Check environment variables
+echo $SSH_AUTH_SOCK
+echo $SSH_AGENT_PID
+
+# Check loaded keys
+ssh-add -l
+
+# Start agent if needed
+eval "$(ssh-agent -s)"
+
+# Add keys if needed
+ssh-add ~/.ssh/id_rsa ~/.ssh/github_ed25519
+
 # Basic usage - scan p_ctrl from 0.0 to 1.0 with 20 points, keeping p_proj fixed at 0.5
 /scratch/ty296/CT_MPS_mini/mini_memory_benchmark.sh --L 20 --p-range "0.0:1.0:20" --p-fixed-name p_proj --p-fixed-value 0.5 --memory 40G
 
