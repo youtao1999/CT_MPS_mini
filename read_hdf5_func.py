@@ -1,6 +1,6 @@
 # %%
 import sys
-sys.path.append('/scratch/ty296/CT_MPS_mini')
+sys.path.append('/Users/youtao/code/CT_MPS_mini')
 # %%
 import h5py
 import glob
@@ -64,14 +64,15 @@ def calculate_variance_and_error(sv_values: List[float]) -> Tuple[float, float]:
 
 
 class Postprocessing:
-    def __init__(self, p_fixed_name: str, p_fixed_value: float, n: int):
+    def __init__(self, p_fixed_name: str, p_fixed_value: float, n: int, pwd: str):
         self.p_fixed_name = p_fixed_name
         self.p_fixed_value = p_fixed_value
         self.n = n
+        self.pwd = pwd
         print("p_fixed_name", self.p_fixed_name, "p_fixed_value", self.p_fixed_value, "n", self.n)
-        self.sv_combined = "/scratch/ty296/hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value)
-        self.dir_name = "/scratch/ty296/hdf5_data/{}{}".format(self.p_fixed_name, self.p_fixed_value)
-        self.save_folder = '/scratch/ty296/plots'
+        self.sv_combined = os.join(self.pwd, "hdf5_data_combined/sv_combined_{}{}.h5".format(self.p_fixed_name, self.p_fixed_value))
+        self.dir_name = os.join(self.pwd, "{}{}".format(self.p_fixed_name, self.p_fixed_value))
+        self.save_folder = os.join(self.pwd, "plots")
         self.counter = 0
 
     def postprocessing(self):
@@ -86,7 +87,7 @@ class Postprocessing:
                         p_proj = metadata[result_group]['p_proj'][()]
                         p_ctrl = metadata[result_group]['p_ctrl'][()]
                         L = metadata[result_group]['args']['L'][()]
-                        seed = metadata[result_group]['seed'][()]
+                        # seed = metadata[result_group]['seed'][()]
                         # Print all attributes in args group
                         args_group = metadata[result_group]['args']
                         maxdim = args_group['maxdim'][()]
@@ -114,7 +115,7 @@ class Postprocessing:
                         grp.attrs['maxbond'] = maxbond
                         grp.attrs['maxdim'] = maxdim
                         grp.attrs['n_chunk_realizations'] = n_chunk_realizations
-                        grp.attrs['seed'] = seed
+                        # grp.attrs['seed'] = seed
                         
     def h5_to_csv(self, threshold: float):
         with h5py.File(self.sv_combined, 'r') as f:
@@ -238,9 +239,9 @@ class Postprocessing:
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plt.savefig(f'/scratch/ty296/plots/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
+        plt.savefig(f'{self.save_folder}/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
         plt.close()
-        print(f'threshold {threshold} saved to /scratch/ty296/plots/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
+        print(f'threshold {threshold} saved to {self.save_folder}/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
         # plt.show()
 
 
@@ -253,10 +254,10 @@ if __name__ == "__main__":
     p_fixed_name = 'p_ctrl'
     p_fixed_value = 0.0
     n = 0
-    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n) 
+    postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, pwd="/Users/youtao/code") 
     postprocessing.postprocessing()
     print(postprocessing.counter, 'realizations * num_p_values')
 
-    for threshold in np.logspace(-15, -5, 10):
-        postprocessing.h5_to_csv(threshold)
-        postprocessing.plot_from_csv(threshold)
+    # for threshold in np.logspace(-15, -5, 10):
+    #     postprocessing.h5_to_csv(threshold)
+    #     postprocessing.plot_from_csv(threshold)
