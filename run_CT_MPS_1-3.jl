@@ -14,34 +14,29 @@ using Printf
 using ArgParse
 using Serialization
 
+function sv_check(mps::MPS, cutoff::Float64, L::Int)
+    mps_ = orthogonalize(copy(mps), div(L,2))
+    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=cutoff)
+    return array(diag(S))
+end
+
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
-    initial_state = copy(ct_f.mps)
-    initial_maxdim = CT.max_bond_dim(ct_f.mps)
-    println("initial_maxdim: ",initial_maxdim)
+    println(sv_check(ct_f.mps, cutoff, L))
     i=1
-    # T_max = 100
+    # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     # println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
     for idx in 1:T_max
         # println(idx)
         # before = Sys.maxrss()
-        @allocated begin
-        i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        end
-        after = Sys.maxrss()
+        # @allocated begin
+        i, _ =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        # end
+        # after = Sys.maxrss()
         # println(Base.summarysize(ct_f.adder))
         # println(Base.summarysize(ct_f.mps))
-        println(idx, " maxrss: ", after / 1024^2, " MB", " maxbond: ", CT.max_bond_dim(ct_f.mps))
-        # mps_ = orthogonalize(ct_f.mps, div(ct_f.L,2))
-        # _, S = svd(mps_[div(ct_f.L,2)], (linkind(mps_, div(ct_f.L,2)),); cutoff=ct_f._cutoff)
-        # println("sv cutoff: ", ct_f._cutoff)
-        # println("lower bound sv: ", S[end])
-        if idx % 80 == 0
-            GC.gc()
-            println("GC.gc()")
-        end
-        # println(varinfo())
+        println(sv_check(ct_f.mps, cutoff, L))
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -457,4 +452,4 @@ end
 
 
 
-# julia --sysimage ~/.julia/sysimages/sys_itensors.so run_CT_MPS.jl --p 1 --L 8 --seed 0 --ancilla 0
+# julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=CT run_CT_MPS_1-3.jl --p_range "0.2" --p_fixed_name "p_ctrl" --p_fixed_value 0.0 --L 8 --cutoff 1e-15 --n_chunk_realizations 1 --random --ancilla 0 --maxdim 64 --output_dir "/scratch/ty296/debug_sv" --store_sv

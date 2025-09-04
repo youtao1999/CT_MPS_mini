@@ -180,7 +180,7 @@ class Postprocessing:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
         # Get sorted L values and create color map
-        L_values = sorted(plot_data.keys())
+        L_values = sorted(plot_data.keys())[0:4]
         n_L = len(L_values)
         
         # Create increasingly deeper shades of blue proportional to L value
@@ -219,7 +219,7 @@ class Postprocessing:
         ax1.set_ylabel('Mean Entropy ± SEM')
         ax1.set_title('Mean Entropy vs p_proj for Different L')
         ax1.legend()
-        ax1.set_xlim(0.0, 1.0)
+        ax1.set_xlim(0.2, 1.0)
         ax1.grid(True, alpha=0.3)
 
         # Plot 2: p_proj vs variance ± se_var
@@ -238,7 +238,7 @@ class Postprocessing:
         ax2.set_ylabel('Variance ± SEVar')
         ax2.set_title('Variance vs p_proj for Different L')
         ax2.legend()
-        ax2.set_xlim(0.0, 1.0)
+        ax2.set_xlim(0.2, 1.0)
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
@@ -258,9 +258,9 @@ if __name__ == "__main__":
     p_fixed_value = 0.0
     n = 0
     postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, pwd="/scratch/ty296") 
-    # postprocessing.postprocessing()
+    postprocessing.postprocessing()
     print(postprocessing.counter, 'realizations * num_p_values')
 
-    for threshold in np.logspace(-15, -5, 10):
-        postprocessing.h5_to_csv(threshold)
-        postprocessing.plot_from_csv(threshold)
+    # for threshold in np.logspace(-15, -5, 1):
+    #     postprocessing.h5_to_csv(threshold)
+    #     postprocessing.plot_from_csv(threshold)

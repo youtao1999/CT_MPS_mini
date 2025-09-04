@@ -25,7 +25,6 @@ mutable struct CT_MPS
     seed_m::Union{Int,Nothing} # random seed for "measurement outcome".
     x0::Union{Rational{Int},Rational{BigInt},Nothing}
     xj::Set
-    _eps::Float64
     ancilla::Int
     folded::Bool
     rng::Random.AbstractRNG
@@ -59,7 +58,6 @@ function CT_MPS(
     seed_m::Union{Nothing,Int}=nothing,
     x0::Union{Rational{Int},Rational{BigInt},Nothing}=nothing,
     xj::Set=Set([1 // 3, 2 // 3]),
-    _eps::Float64=1e-10,
     ancilla::Int=0,
     folded::Bool=false,
     _maxdim0::Int=10,
@@ -74,10 +72,9 @@ function CT_MPS(
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
     mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_cutoff,_maxdim0)
-    println(typeof(qubit_site))
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
-    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, _eps, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _cutoff, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
+    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _cutoff, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
     return ct
 end
 
@@ -139,7 +136,6 @@ function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational
             end
         end
     end
-    # return MPS(vec, ct.qubit_site; cutoff=ct._eps, maxdim=ct._maxdim)
 end
 
 """
@@ -333,10 +329,18 @@ end
 #         i=mod(((i+1) - 1),ct.L+ct.ancilla )+ 1
 #     end
 # end
+
+function sv_check(mps::MPS, cutoff::Float64, L::Int)
+    mps_ = orthogonalize(copy(mps), div(L,2))
+    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=cutoff)
+    return array(diag(S))
+end
+
 """randomly apply control or Bernoulli map to physical site i (the left leg of op)
 """
 function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     op_l=[]
+    sv_check_dict = Dict{String, Any}()
     p_0=-1.  # -1 for not applicable because of Bernoulli map
     if rand(ct.rng_C) < p_ctrl
         # control map
@@ -347,6 +351,8 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
             end
             n =  rand(ct.rng_m) < p_0 ?  0 : 1
             control_map(ct, [n], [i])
+            sv_check_dict = Dict("Type"=>"Control","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+            # println(Dict("Type"=>"Control","sv"=>sv_check_dict["Control"]))
             push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
         elseif ct.xj in [Set([1 // 3, -1 // 3])]
             # p_00= ...
@@ -367,6 +373,8 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     else
         # chaotic map
         Bernoulli_map!(ct, i)
+        sv_check_dict = Dict("Type"=>"Bernoulli","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+        # println(Dict("Type"=>"Bernoulli","sv"=>sv_check_dict["Bernoulli"]))
         push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
         i=mod(((i+1) - 1),(ct.L) )+ 1
     end
@@ -379,13 +387,15 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
                 p2=inner_prob(ct, [0], [pos])
                 n= rand(ct.rng_m) < p2 ? 0 : 1
                 P!(ct,[n],[pos])
+                sv_check_dict = Dict("Type"=>"Projection","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+                # println(Dict("Type"=>"Projection","sv"=>sv_check_dict["Projection"]))
                 push!(op_l,Dict("Type"=>"Projection","Site"=>[pos],"Outcome"=>[n]))
             end
         end
     end
     update_history(ct,op_l,p_0)
     # println(varinfo())
-    return i
+    return i, sv_check_dict
 end
 
 function update_history(ct::CT_MPS,op::Vector{Any},p_0::Float64)
