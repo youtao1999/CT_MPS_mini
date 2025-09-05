@@ -9,6 +9,7 @@ import tqdm
 from typing import List, Tuple
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, threshold: float) -> float:
     """
@@ -156,8 +157,6 @@ class Postprocessing:
         Plot p_proj vs mean±SEM and p_proj vs variance±SEVAR from CSV file
         CSV should have columns: L, p_ctrl, p_proj, mean, sem, variance, se_var
         """
-        import matplotlib.pyplot as plt
-        import numpy as np
         
         # Read CSV data
         csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
@@ -247,6 +246,118 @@ class Postprocessing:
         print(f'threshold {threshold} saved to {self.save_folder}/s{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.png')
         # plt.show()
 
+    def fixed_L_threshold_comparison_plot(self, L: int):
+        """
+        Plot the comparison of the entropy for different thresholds
+        """
+        
+        # Read from csv files
+        csv_paths = glob.glob(os.path.join(self.save_folder, f's{self.n}_threshold*.csv'))
+        
+        # Organize data by threshold values
+        plot_data = {}
+        import re
+        
+        for csv_path in csv_paths:
+            df = pd.read_csv(csv_path)
+            # Find data specific to L
+            df_L = df[df['L'] == L]
+            
+            if len(df_L) == 0:
+                continue
+                
+            # Extract threshold from csv_path filename
+            threshold_match = re.search(r'threshold([\d\.e\-\+]+)', csv_path)
+            if threshold_match:
+                threshold_str = threshold_match.group(1)
+                threshold_val = float(threshold_str)
+            else:
+                continue
+                
+            # Sort by p_proj and get corresponding values
+            sorted_indices = np.argsort(df_L['p_proj'])
+            plot_data[threshold_val] = {
+                'p_proj': df_L['p_proj'].iloc[sorted_indices].values,
+                'mean': df_L['mean'].iloc[sorted_indices].values,
+                'sem': df_L['sem'].iloc[sorted_indices].values,
+                'variance': df_L['variance'].iloc[sorted_indices].values,
+                'se_var': df_L['se_var'].iloc[sorted_indices].values
+            }
+
+        # Create plots with same formatting as plot_from_csv
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        # Get sorted threshold values and create color map
+        threshold_values = sorted(plot_data.keys())
+        n_thresholds = len(threshold_values)
+        
+        # Create increasingly deeper shades of blue proportional to threshold value
+        colors = []
+        if n_thresholds > 1:
+            min_thresh = min(threshold_values)
+            max_thresh = max(threshold_values)
+            
+            for thresh in threshold_values:
+                # Normalize threshold to range [0, 1]
+                norm_thresh = (thresh - min_thresh) / (max_thresh - min_thresh)
+                
+                # Create dark blue to light blue gradient
+                # Lowest threshold (norm_thresh=0) -> dark blue (0.0, 0.0, 0.8)
+                # Highest threshold (norm_thresh=1) -> light blue (0.7, 0.7, 1.0)
+                red = 0.7 * norm_thresh            # From 0.0 to 0.7
+                green = 0.7 * norm_thresh          # From 0.0 to 0.7  
+                blue = 0.8 + 0.2 * norm_thresh     # From 0.8 to 1.0
+                
+                blue_color = (red, green, blue)
+                colors.append(blue_color)
+        else:
+            colors = [(0.0, 0.0, 0.8)]  # Single dark blue color
+
+        # Plot 1: p_proj vs mean ± sem
+        for i, threshold in enumerate(threshold_values):
+            data = plot_data[threshold]
+            min_ = abs(np.log(sorted(threshold_values, reverse=True)[0]))
+            max_ = abs(np.log(min(threshold_values)))
+            alpha = (abs(np.log(threshold))-min_)/(max_-min_)
+            ax1.errorbar(data['p_proj'], data['mean'], yerr=data['sem'], 
+                        label=f'threshold={threshold:.1e}', marker='o', capsize=5, capthick=2, color='blue', alpha=alpha)
+
+        ax1.set_xlabel('p_proj')
+        ax1.set_ylabel('Mean Entropy ± SEM')
+        ax1.set_title(f'Mean Entropy vs p_proj for L={L}')
+        ax1.legend()
+        ax1.set_xlim(0.2, 1.0)
+        ax1.grid(True, alpha=0.3)
+
+        # Plot 2: p_proj vs variance ± se_var
+        for i, threshold in enumerate(threshold_values):
+            data = plot_data[threshold]
+            min_ = abs(np.log(sorted(threshold_values, reverse=True)[0]))
+            max_ = abs(np.log(min(threshold_values)))
+            alpha = (abs(np.log(threshold))-min_)/(max_-min_)
+            ax2.errorbar(data['p_proj'], data['variance'], yerr=data['se_var'], 
+                        label=f'threshold={threshold:.1e}', marker='s', capsize=5, capthick=2, color='blue', alpha=alpha)
+
+        ax2.set_xlabel('p_proj')
+        ax2.set_ylabel('Variance ± SEVar')
+        ax2.set_title(f'Variance vs p_proj for L={L}')
+        ax2.legend()
+        ax2.set_xlim(0.2, 1.0)
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(f'{self.save_folder}/s{self.n}_threshold_comparison_{L}.png')
+        plt.close()
+        print(f'Threshold comparison for L={L} saved to {self.save_folder}/s{self.n}_threshold_comparison_{L}.png')
+        #     # find all 
+        #     csv_path = os.path.join(self.save_folder, f's{self.n}_threshold{threshold:.1e}_{self.p_fixed_name}{self.p_fixed_value}.csv')
+        #     df = pd.read_csv(csv_path)
+        #     # find in each row the L value is equal to L
+        #     df_L = df[df['L'] == L]
+        #     p_proj = df_L['p_proj']
+        #     mean = df_L['mean']
+        #     sem = df_L['sem']
+
 
 # %%
 # Example usage:
@@ -261,6 +372,8 @@ if __name__ == "__main__":
     # postprocessing.postprocessing()
     # print(postprocessing.counter, 'realizations * num_p_values')
 
-    for threshold in np.logspace(-15, -5, 10):
-        postprocessing.h5_to_csv(threshold)
-        postprocessing.plot_from_csv(threshold)
+    # for threshold in np.logspace(-15, -5, 10):
+    #     postprocessing.h5_to_csv(threshold)
+    #     postprocessing.plot_from_csv(threshold)
+
+    postprocessing.fixed_L_threshold_comparison_plot(L=24)
