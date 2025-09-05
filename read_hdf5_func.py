@@ -133,7 +133,7 @@ class Postprocessing:
             data = []
             for key_val, s0_list in groups.items():
                 ensemble_size = len(s0_list)
-                print(f'key_val {key_val} ensemble_size {ensemble_size}')
+                # print(f'key_val {key_val} ensemble_size {ensemble_size}')
                 mean, sem = calculate_mean_and_error(s0_list)
                 if len(s0_list) > 1:
                     variance, se_var = calculate_variance_and_error(s0_list)
@@ -262,5 +262,5 @@ if __name__ == "__main__":
     # print(postprocessing.counter, 'realizations * num_p_values')
 
     for threshold in np.logspace(-15, -5, 10):
-        postprocessing.h5_to_csv(threshold ** 2)
+        postprocessing.h5_to_csv(threshold)
         postprocessing.plot_from_csv(threshold)

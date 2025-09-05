@@ -28,7 +28,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
         # println(sv_check_dict)
-        # println("maxrss: ", Sys.maxrss() / 1024^2, " MB")
+        println("maxrss: ", Sys.maxrss() / 1024^2, " MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -413,7 +413,7 @@ function main()
                         seed = rand(1:10000)
                     else
                         seed = 0
-                    end
+                    end 
                     
                     # Get results as dictionary (scalar entropy only)
                     results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)

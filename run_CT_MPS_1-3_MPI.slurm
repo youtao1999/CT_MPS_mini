@@ -2,8 +2,8 @@
 #SBATCH --job-name=CT_MPS          # Job name
 #SBATCH --ntasks=10                # Number of tasks (processes)
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
-#SBATCH --mem-per-cpu=4G          # Memory per CPU core (4GB each)
-#SBATCH --time=06:00:00            # Time limit hrs:min:sec
+#SBATCH --mem-per-cpu=10G          # Memory per CPU core (4GB each)
+#SBATCH --time=10:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
 #SBATCH --partition=main
@@ -23,7 +23,7 @@ NWORKERS=10
 : ${P_FIXED_NAME:="p_ctrl"}  # Keep as string - it's a name
 : ${P_FIXED_VALUE:=0.5}
 : ${ANCILLA:=0}
-: ${MAXDIM:=9223372036854775807} # julia Typemax(Int)
+: ${MAXDIM:=512} # julia Typemax(Int)
 : ${CUTOFF:=1e-10}
 : ${N_CHUNK_REALIZATIONS:=10}  # Default 20 realizations for 20 workers
 : ${OUTPUT_DIR:="/scratch/ty296/hdf5_data"}
@@ -33,9 +33,10 @@ NWORKERS=10
 echo "Loading modules..."
 module purge
 module use /projects/community/modulefiles/
-module load julia
-# Use default Intel MPI (since it's the system default)
-module load hdf5  # Add HDF5 module for system libraries
+module load julia/1.9-bd387 # julia
+module load gcc/14.2.0-cermak # GCC compiler
+module load gcc/14.2.0/openmpi/5.0.5-cermak # Base OpenMPI module
+module load gcc/14.2.0/openmpi/5.0.5/hdf5/1.14.5-cermak # HDF5 module compiled with GCC 14.2.0
 
 # Set threading environment (following SLURM script pattern)
 export JULIA_NUM_THREADS=1
@@ -45,28 +46,6 @@ export OPENBLAS_NUM_THREADS=1
 
 # Ensure output directory exists
 mkdir -p $OUTPUT_DIR
-
-echo "Checking MPI configuration..."
-which mpiexec
-echo "MPI Version:"
-mpiexec --version || echo "No version info available"
-echo "Library dependencies:"
-ldd $(which mpiexec) | grep -E "(mpi|ompi)" || echo "No MPI libraries found"
-echo "Environment modules loaded:"
-module list
-echo ""
-echo "Running CT_MPS simulation with $NWORKERS workers on single node"
-echo "Job ID: $JOB_ID"
-echo "Output directory: $OUTPUT_DIR"
-echo "System size L: $L"
-echo "P range: $P_RANGE"
-echo "P fixed name: $P_FIXED_NAME"
-echo "P fixed value: $P_FIXED_VALUE"
-echo "Ancilla: $ANCILLA"
-echo "Max bond dimension: $MAXDIM"
-echo "Cutoff: $CUTOFF"
-echo "Total realizations: $N_CHUNK_REALIZATIONS (distributed across workers)"
-echo "Using srun for MPI execution"
 
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
@@ -85,15 +64,3 @@ mpirun -n $NWORKERS julia --project=/scratch/ty296/CT_MPS_mini/CT \
     --random \
     --output_dir $OUTPUT_DIR \
     --store_sv
-
-echo "Simulation completed. Results saved to:"
-echo "HDF5 files: ${OUTPUT_DIR}/${P_FIXED_NAME}${P_FIXED_VALUE}_${JOB_ID}_worker*_a${ANCILLA}_L${L}.h5"
-
-# Following SLURM script pattern - comment with example usage
-echo ""
-echo "Example usage:"
-echo "  # Set custom parameters via environment variables"
-echo "  L=12 P_RANGE=\"0.5:1.0:11\" N_CHUNK_REALIZATIONS=40 ./run_20_workers.sh"
-echo ""
-echo "  # Or use defaults (L=10, P_RANGE=\"0.0:1.0:10\", N_CHUNK_REALIZATIONS=20)"
-echo "  ./run_CT_MPS_1-3_MPI.slurm"

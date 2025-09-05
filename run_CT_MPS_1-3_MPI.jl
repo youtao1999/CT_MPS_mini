@@ -15,175 +15,7 @@ using Printf
 using ArgParse
 using Serialization
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
-    initial_state = copy(ct_f.mps)
-    initial_maxdim = CT.max_bond_dim(ct_f.mps)
-    println("initial_maxdim: ",initial_maxdim)
-    i=1
-    # T_max = 100
-    T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
-    # println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
-    for idx in 1:T_max
-        # println(idx)
-        # before = Sys.maxrss()
-        i=CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        after = Sys.maxrss()
-        # println(Base.summarysize(ct_f.adder))
-        # println(Base.summarysize(ct_f.mps))
-        println(idx, " maxrss: ", after / 1024^2, " MB")
-        # println(varinfo())
-    end
-    O=CT.order_parameter(ct_f)
-    max_bond= CT.max_bond_dim(ct_f.mps)
-    if ancilla ==0 
-        if sv
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv)
-            return O, sv_arr, max_bond
-        else
-            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
-            ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
-            return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
-        end
-    else
-        if sv
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;sv=sv)
-            return O, SA, max_bond
-        else
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;n=n)
-            return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
-        end
-    end
-end
-
-"""
-Parse the p_range argument into a list of values
-"""
-function parse_p_range(p_range_str::String)
-    if contains(p_range_str, ":")
-        # Format: "start:stop:num"
-        parts = split(p_range_str, ":")
-        if length(parts) != 3
-            error("Invalid range format. Expected start:stop:num")
-        end
-        start = parse(Float64, parts[1])
-        stop = parse(Float64, parts[2])
-        num = parse(Int, parts[3])
-        return range(start, stop, length=num) |> collect
-    else
-        # Format: "0.1,0.2,0.3"
-        return parse.(Float64, split(p_range_str, ","))
-    end
-end
-
-"""
-Store a single result directly to HDF5 file, optimized for large singular value arrays.
-Uses compression and efficient chunking for large arrays.
-Appends results to existing file or creates new file.
-"""
-function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entropy_data, max_bond::Int, 
-                          p_ctrl::Float64, p_proj::Float64, p_value::Float64, realization::Int, 
-                          args::Dict, ancilla::Int)
-    
-    # Each worker writes multiple results to their own unique file
-    # First call creates file and groups, subsequent calls append to same file
-    file_mode = isfile(filename) ? "r+" : "cw"
-    h5open(filename, file_mode) do file
-        # Initialize file structure if new file
-        if file_mode == "cw"
-            metadata_group = create_group(file, "metadata")
-            sv_arrays_group = create_group(file, "singular_values")
-        else
-            metadata_group = file["metadata"]
-            sv_arrays_group = file["singular_values"]
-        end
-        
-        result_name = "result_$(result_idx)"
-        
-        # Store metadata
-        meta_group = create_group(metadata_group, result_name)
-        meta_group["O"] = O
-        meta_group["max_bond"] = max_bond
-        meta_group["p_ctrl"] = p_ctrl
-        meta_group["p_proj"] = p_proj
-        meta_group["p_value"] = p_value
-        meta_group["realization"] = realization
-        meta_group["ancilla"] = ancilla
-        
-        # Store args
-        args_group = create_group(meta_group, "args")
-        for (key, value) in args
-            try
-                args_group[key] = value
-            catch
-                args_group[key] = string(value)
-            end
-        end
-        
-        # Store singular values with compression (always present in HDF5 files)
-        sv_data = Float64.(entropy_data)
-        
-        sv_dataset = create_dataset(sv_arrays_group, result_name, 
-        datatype(Float64), dataspace(sv_data),
-        chunk=(min(1000, length(sv_data)),), 
-        shuffle=true, deflate=6)
-        write(sv_dataset, sv_data)        
-        # No global metadata stored
-    end
-end
-
-function parse_my_args()
-    s = ArgParseSettings()
-    @add_arg_table! s begin
-        "--p_range", "-p"
-        arg_type = String
-        default = "0.0:1.0:10"
-        help = "range of p_scan"
-        "--p_fixed_name", "-f"
-        arg_type = String
-        default = "p_ctrl"
-        help = "fixed p value name"
-        "--p_fixed_value", "-v"
-        arg_type = Float64
-        default = 0.0
-        help = "fixed p value"
-        "--L", "-L"
-        arg_type = Int
-        default = 8
-        help = "system size"
-        "--random", "-r"
-        action = :store_true
-        help = "use random seed"
-        "--ancilla", "-a"
-        arg_type = Int
-        default = 0
-        help = "number of ancilla"
-        "--maxdim", "-m"
-        arg_type = Int
-        default = 10
-        help = "set the maximal bond dim"
-        "--cutoff", "-c"
-        arg_type = Float64
-        default = 1e-15
-        help = "set the cutoff"
-        "--n_chunk_realizations", "-n"
-        arg_type = Int
-        default = 1
-        help = "number of realizations handled per cpu worker"
-        "--job_id", "-j"
-        arg_type = Int
-        default = 0
-        help = "job id"
-        "--output_dir", "-o"
-        arg_type = String
-        default = "/scratch/ty296/json_data"
-        help = "output directory"
-        "--store_sv"
-        action = :store_true
-        help = "store singular values (uses HDF5 format), otherwise store scalar entropy only (JSON format)"
-    end
-    return parse_args(s)
-end
+include("run_CT_MPS_1-3.jl")
 
 function main()
     MPI.Init()
@@ -240,7 +72,7 @@ function main()
         # Add hostname and process ID for extra uniqueness
         hostname = gethostname()
         pid = getpid()
-        filename = "$(args["output_dir"])/$(args["p_fixed_name"])$(args["p_fixed_value"])_$(args["job_id"])_worker$(rank)_$(hostname)_$(pid)_a$(args["ancilla"])_L$(args["L"]).h5"
+        filename = "$(args["output_dir"])/$(args["p_fixed_name"])$(args["p_fixed_value"])_$(args["job_id"])_worker$(rank)_$(hostname)_$(pid)_L$(args["L"]).h5"
         println("Worker $rank will write to file: $filename")
         result_count = 0
         
@@ -270,7 +102,7 @@ function main()
                 
                 # Store result directly to HDF5
                 store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
-                                p_ctrl, p_proj, p, i, args, args["ancilla"])
+                                p_ctrl, p_proj, i, args, seed)
                 
                 println("Worker $rank stored result $result_count (realization=$i, p=$p) to HDF5")
             end
