@@ -53,6 +53,8 @@ while [[ $# -gt 0 ]]; do
             ;;
         --CUTOFF=*)
             CUTOFF="${1#*=}"
+            # IMPORTANT: this is the cutoff for the SQUARE of the singular values, not the cutoff for the singular values themselves!
+            # For example, if the cutoff is 1e-30, then the singular values smaller than 1e-15 will be truncated.
             shift
             ;;
         *)
