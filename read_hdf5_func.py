@@ -258,9 +258,9 @@ if __name__ == "__main__":
     p_fixed_value = 0.0
     n = 0
     postprocessing = Postprocessing(p_fixed_name, p_fixed_value, n, pwd="/scratch/ty296") 
-    postprocessing.postprocessing()
-    print(postprocessing.counter, 'realizations * num_p_values')
+    # postprocessing.postprocessing()
+    # print(postprocessing.counter, 'realizations * num_p_values')
 
-    # for threshold in np.logspace(-15, -5, 1):
-    #     postprocessing.h5_to_csv(threshold)
-    #     postprocessing.plot_from_csv(threshold)
+    for threshold in np.logspace(-15, -5, 10):
+        postprocessing.h5_to_csv(threshold ** 2)
+        postprocessing.plot_from_csv(threshold)

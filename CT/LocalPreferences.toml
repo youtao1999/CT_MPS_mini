@@ -1,13 +1,13 @@
+[HDF5_jll]
+libhdf5_hl_path = ""
+libhdf5_path = ""
+
 [MPIPreferences]
 __clear__ = ["preloads_env_switch"]
 _format = "1.0"
-abi = "MPICH"
+abi = "OpenMPI"
 binary = "system"
 cclibs = []
-libmpi = "libmpi"
+libmpi = "/projects/community/gcc/14.2.0/openmpi/5.0.5/cermak/lib/libmpi"
 mpiexec = "mpiexec"
 preloads = []
-
-[HDF5_jll]
-libhdf5_path = ""
-libhdf5_hl_path = ""
