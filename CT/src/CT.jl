@@ -60,8 +60,8 @@ function CT_MPS(
     xj::Set=Set([1 // 3, 2 // 3]),
     ancilla::Int=0,
     folded::Bool=false,
-    _maxdim0::Int=10,
-    _cutoff::Float64=1e-10,
+    _maxdim0::Int=2^9,
+    _cutoff::Float64=1e-30,
     _maxdim::Int=typemax(Int),
     debug::Bool=false,
     simplified_U::Bool=false,
@@ -340,7 +340,7 @@ end
 """
 function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     op_l=[]
-    sv_check_dict = Dict{String, Any}()
+    # sv_check_dict = Dict{String, Any}()
     p_0=-1.  # -1 for not applicable because of Bernoulli map
     if rand(ct.rng_C) < p_ctrl
         # control map
@@ -351,7 +351,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
             end
             n =  rand(ct.rng_m) < p_0 ?  0 : 1
             control_map(ct, [n], [i])
-            sv_check_dict = Dict("Type"=>"Control","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+            # sv_check_dict = Dict("Type"=>"Control","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
             # println(Dict("Type"=>"Control","sv"=>sv_check_dict["Control"]))
             push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
         elseif ct.xj in [Set([1 // 3, -1 // 3])]
@@ -366,6 +366,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
         if ct.debug
             print("Control with $(i)")
         end
+
         i=mod(((i-1) - 1),(ct.L)) + 1
         if ct.debug
             println("=> Next i is $(i)")
@@ -373,7 +374,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     else
         # chaotic map
         Bernoulli_map!(ct, i)
-        sv_check_dict = Dict("Type"=>"Bernoulli","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+        # sv_check_dict = Dict("Type"=>"Bernoulli","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
         # println(Dict("Type"=>"Bernoulli","sv"=>sv_check_dict["Bernoulli"]))
         push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
         i=mod(((i+1) - 1),(ct.L) )+ 1
@@ -387,7 +388,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
                 p2=inner_prob(ct, [0], [pos])
                 n= rand(ct.rng_m) < p2 ? 0 : 1
                 P!(ct,[n],[pos])
-                sv_check_dict = Dict("Type"=>"Projection","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+                # sv_check_dict = Dict("Type"=>"Projection","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
                 # println(Dict("Type"=>"Projection","sv"=>sv_check_dict["Projection"]))
                 push!(op_l,Dict("Type"=>"Projection","Site"=>[pos],"Outcome"=>[n]))
             end
@@ -395,7 +396,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     end
     update_history(ct,op_l,p_0)
     # println(varinfo())
-    return i, sv_check_dict
+    return i #sv_check_dict
 end
 
 function update_history(ct::CT_MPS,op::Vector{Any},p_0::Float64)
@@ -799,7 +800,7 @@ function dw_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_ram:
     end
 end
 
-function von_Neumann_entropy(mps::MPS, i::Int; n::Int=1,positivedefinite=false,threshold::Float64=1e-16,sv=false)
+function von_Neumann_entropy(mps::MPS, i::Int; n::Int=1,positivedefinite=false,threshold::Float64=1e-30,sv=false)
     println("from SvN, n=$n, threshold=$threshold")
     mps_ = orthogonalize(mps, i)
     _, S = svd(mps_[i], (linkind(mps_, i),); cutoff=threshold)

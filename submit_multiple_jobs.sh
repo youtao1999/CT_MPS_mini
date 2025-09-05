@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Script to submit multiple run_CT_MPS_1-3.slurm jobs
-# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=24 --P_RANGE="0.24210526,0.28421053,0.32631579,0.36842105,0.41052632,0.45263158,0.49473684" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=80G
+# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=20 --P_RANGE="0.2:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=80G
 
 # SLURM script
 SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.slurm"
 
 # Set default values
 : ${MEMORY:=4G}  # Default memory if not specified
-: ${CUTOFF:=1e-15}  # Default cutoff if not specified
+: ${CUTOFF:=1e-30}  # Default cutoff if not specified
 : ${N_CHUNK_REALIZATIONS:=1}  # Default chunk realizations if not specified
 : ${MAXDIM:=64}  # Default maxdim if not specified (will be recalculated in Julia based on L)
 

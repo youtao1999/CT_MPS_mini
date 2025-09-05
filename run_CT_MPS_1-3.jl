@@ -22,21 +22,13 @@ end
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
-    println(sv_check(ct_f.mps, cutoff, L))
     i=1
     # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
-    # println("memory after CT_MPS: ", Sys.maxrss() / 1024^2, " MB")
     for idx in 1:T_max
-        # println(idx)
-        # before = Sys.maxrss()
-        # @allocated begin
-        i, _ =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        # end
-        # after = Sys.maxrss()
-        # println(Base.summarysize(ct_f.adder))
-        # println(Base.summarysize(ct_f.mps))
-        println(sv_check(ct_f.mps, cutoff, L))
+        i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        # println(sv_check_dict)
+        # println("maxrss: ", Sys.maxrss() / 1024^2, " MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -304,7 +296,6 @@ function parse_my_args()
     @add_arg_table! s begin
         "--p_range", "-p"
         arg_type = String
-        default = "0.0:1.0:10"
         help = "range of p_scan"
         "--p_fixed_name", "-f"
         arg_type = String
@@ -312,18 +303,15 @@ function parse_my_args()
         help = "fixed p value name"
         "--p_fixed_value", "-v"
         arg_type = Float64
-        default = 0.0
         help = "fixed p value"
         "--L", "-L"
         arg_type = Int
-        default = 8
         help = "system size"
         "--random", "-r"
         action = :store_true
         help = "use random seed"
         "--ancilla", "-a"
         arg_type = Int
-        default = 0
         help = "number of ancilla"
         "--maxdim", "-m"
         arg_type = Int
@@ -331,15 +319,12 @@ function parse_my_args()
         help = "set the maximal bond dim"
         "--cutoff", "-c"
         arg_type = Float64
-        default = 1e-15
         help = "set the cutoff"
         "--n_chunk_realizations", "-n"
         arg_type = Int
-        default = 1
         help = "number of realizations handled per cpu worker"
         "--job_id", "-j"
         arg_type = Int
-        default = 0
         help = "job id"
         "--output_dir", "-o"
         arg_type = String
