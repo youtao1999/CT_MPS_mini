@@ -14,14 +14,14 @@ using Printf
 using ArgParse
 using Serialization
 
-function sv_check(mps::MPS, cutoff::Float64, L::Int)
+function sv_check(mps::MPS, eps::Float64, L::Int)
     mps_ = orthogonalize(copy(mps), div(L,2))
-    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=cutoff)
+    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=eps)
     return array(diag(S))
 end
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
+function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim)
     i=1
     # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
@@ -34,20 +34,20 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
         if sv
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);sv=sv,threshold=ct_f._cutoff,positivedefinite=false,n=n)
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
             # println(length(sv_arr), "lower bound sv: ", sv_arr[end])
             return O, sv_arr, max_bond
         else
-            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2);n=n)
+            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;n=n)
             # ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
             return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     else
         if sv
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;sv=sv)
+            SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;sv=sv)
             return O, SA, max_bond
         else
-            SA=CT.von_Neumann_entropy(ct_f.mps,1;n=n)
+            SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;n=n)
             return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
         end
     end
@@ -317,7 +317,7 @@ function parse_my_args()
         arg_type = Int
         default = 64  # Will be calculated as 2^(L/2) if not provided
         help = "set the maximal bond dim"
-        "--cutoff", "-c"
+        "--threshold", "-t"
         arg_type = Float64
         help = "set the cutoff"
         "--n_chunk_realizations", "-n"
@@ -356,7 +356,7 @@ function main()
     println("L: ", args["L"])
     println("ancilla: ", args["ancilla"])
     println("maxdim: ", args["maxdim"])
-    println("cutoff: ", args["cutoff"])
+    println("threshold: ", args["threshold"])
     println("n_chunk_realizations: ", args["n_chunk_realizations"])
     
     
@@ -382,7 +382,7 @@ function main()
                     seed = 0
                 end
                 # Get results as tuple with singular values
-                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
+                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
                 
                 result_count += 1
                 
@@ -416,7 +416,7 @@ function main()
                     end 
                     
                     # Get results as dictionary (scalar entropy only)
-                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
+                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
                     data_to_serialize = merge(results, Dict("args" => args, "realization number" => i))
                     
                     # Write each result as a separate line (JSON Lines format)
@@ -437,4 +437,4 @@ end
 
 
 
-# julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=CT run_CT_MPS_1-3.jl --p_range "0.2" --p_fixed_name "p_ctrl" --p_fixed_value 0.0 --L 8 --cutoff 1e-15 --n_chunk_realizations 1 --random --ancilla 0 --maxdim 64 --output_dir "/scratch/ty296/debug_sv" --store_sv
+# julia --project=CT run_CT_MPS_1-3.jl --p_range "0.2" --p_fixed_name "p_ctrl" --p_fixed_value 0.0 --L 8 --threshold 1e-15 --n_chunk_realizations 1 --random --ancilla 0 --maxdim 64 --output_dir "/scratch/ty296/debug_sv" --store_sv

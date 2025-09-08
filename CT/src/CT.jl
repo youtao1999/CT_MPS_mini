@@ -36,7 +36,7 @@ mutable struct CT_MPS
     ram_phy::Vector{Int}
     phy_list::Vector{Int}
     _maxdim0::Int
-    _cutoff::Float64
+    _eps::Float64
     _maxdim::Int
     mps::MPS
     vec_history::Vector{MPS}
@@ -61,7 +61,7 @@ function CT_MPS(
     ancilla::Int=0,
     folded::Bool=false,
     _maxdim0::Int=2^9,
-    _cutoff::Float64=1e-30,
+    _eps::Float64=1e-30,
     _maxdim::Int=typemax(Int),
     debug::Bool=false,
     simplified_U::Bool=false,
@@ -71,10 +71,10 @@ function CT_MPS(
     rng_C = seed_C === nothing ? rng : MersenneTwister(seed_C)
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
-    mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_cutoff,_maxdim0)
+    mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
-    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _cutoff, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
+    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _eps, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
     return ct
 end
 
@@ -102,7 +102,7 @@ function _initialize_basis(L::Int,ancilla::Int,folded::Bool)
     return qubit_site, ram_phy, phy_ram, phy_list
 end
 
-function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational{BigInt},Nothing},folded::Bool,qubit_site::Vector{Index{Int64}},ram_phy::Vector{Int},phy_ram::Vector{Int},phy_list::Vector{Int},rng_vec::Random.AbstractRNG,_cutoff::Float64,_maxdim0::Int)
+function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational{BigInt},Nothing},folded::Bool,qubit_site::Vector{Index{Int64}},ram_phy::Vector{Int},phy_ram::Vector{Int},phy_list::Vector{Int},rng_vec::Random.AbstractRNG,_eps::Float64,_maxdim0::Int)
     if ancilla == 0
         if x0 !== nothing
             vec_int = dec2bin(x0, L)
@@ -130,7 +130,7 @@ function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational
             anc0 = MPS(qubit_site[[(phy_ram[L+1])]], ["0"])
             anc1 = MPS(qubit_site[[(phy_ram[L+1])]], ["1"])
             if folded
-                return add(attach_mps(anc0,mps0) , attach_mps(anc1,mps1),cutoff=_cutoff)/sqrt(2)
+                return add(attach_mps(anc0,mps0) , attach_mps(anc1,mps1),cutoff=_eps)/sqrt(2)
             else 
                 return (attach_mps(mps0,anc0) + attach_mps(mps1,anc1))/sqrt(2)
             end
@@ -143,7 +143,7 @@ apply the operator `op` to `mps`, the `op` should have indices of (i,j,k.. i',j'
 the orthogonalization center is at i
 index should be ram index
 """
-function apply_op!(mps::MPS, op::ITensor, cutoff::Float64, maxdim::Int)
+function apply_op!(mps::MPS, op::ITensor, eps::Float64, maxdim::Int)
     i_list = [parse(Int, replace(string(tags(inds(op)[i])[length(tags(inds(op)[i]))]), "n=" => "")) for i in 1:div(length(op.tensor.inds), 2)]
     sort!(i_list)
     # println(i_list)
@@ -162,7 +162,7 @@ function apply_op!(mps::MPS, op::ITensor, cutoff::Float64, maxdim::Int)
         for idx in i_list[1]:i_list[end]-1
             inds1 = (idx ==1) ? [siteind(mps,1)] : [findindex(mps[idx-1],lefttags), findindex(mps[idx],"Site")]
             lefttags=tags(linkind(mps,idx))
-            U, S, V = svd(mps_ij, inds1, cutoff=cutoff,lefttags=lefttags,maxdim=maxdim)
+            U, S, V = svd(mps_ij, inds1, cutoff=eps,lefttags=lefttags,maxdim=maxdim)
             mps[idx] = U
             mps_ij = S * V
         end
@@ -202,9 +202,9 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; bu
         U_4_tensor = ITensor(U_4, ct.qubit_site[ram_idx[1]], ct.qubit_site[ram_idx[2]], ct.qubit_site[ram_idx[1]]', ct.qubit_site[ram_idx[2]]')
         # return U_4_tensor
         if builtin
-            ct.mps=apply(U_4_tensor,ct.mps;cutoff=ct._cutoff,maxdim=ct._maxdim)
+            ct.mps=apply(U_4_tensor,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
         else
-            apply_op!(ct.mps, U_4_tensor,ct._cutoff,ct._maxdim)
+            apply_op!(ct.mps, U_4_tensor,ct._eps,ct._maxdim)
         end
 
         if ct.debug
@@ -220,9 +220,9 @@ end
 function control_map(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     R!(ct, n, i)
     if ct.xj == Set([1 // 3, 2 // 3])
-        ct.mps=apply(ct.adder[i[1]],ct.mps;cutoff=ct._cutoff,maxdim=ct._maxdim)
+        ct.mps=apply(ct.adder[i[1]],ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
         normalize!(ct.mps)
-        truncate!(ct.mps, cutoff=ct._cutoff,maxdim=ct._maxdim)
+        truncate!(ct.mps, cutoff=ct._eps,maxdim=ct._maxdim)
     end
 end
 
@@ -261,18 +261,18 @@ function P!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
         println("Projecting $(n) at Phy $(i)")
     end
     proj_op= projector(ct,n, i)
-    apply_op!(ct.mps, proj_op, ct._cutoff, ct._maxdim)
+    apply_op!(ct.mps, proj_op, ct._eps, ct._maxdim)
     if ct.debug
         println("norm is $(norm(ct.mps))")
     end
     normalize!(ct.mps)
-    truncate!(ct.mps, cutoff=ct._cutoff)
+    truncate!(ct.mps, cutoff=ct._eps)
 end
 """ perform Sigma_X for physical site
 """
 function X!(ct::CT_MPS, i::Int)
     X_op=ITensor([0 1+0im; 1+0im 0],ct.qubit_site[ct.phy_ram[ct.phy_list[i]]],ct.qubit_site[ct.phy_ram[ct.phy_list[i]]]')
-    apply_op!(ct.mps, X_op, ct._cutoff, ct._maxdim)
+    apply_op!(ct.mps, X_op, ct._eps, ct._maxdim)
     # normalize!(ct.mps)
 end
 
@@ -330,9 +330,9 @@ end
 #     end
 # end
 
-function sv_check(mps::MPS, cutoff::Float64, L::Int)
+function sv_check(mps::MPS, eps::Float64, L::Int)
     mps_ = orthogonalize(copy(mps), div(L,2))
-    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=cutoff)
+    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=eps)
     return array(diag(S))
 end
 
@@ -351,7 +351,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
             end
             n =  rand(ct.rng_m) < p_0 ?  0 : 1
             control_map(ct, [n], [i])
-            # sv_check_dict = Dict("Type"=>"Control","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+            # sv_check_dict = Dict("Type"=>"Control","sv"=>sv_check(ct.mps, ct._eps, ct.L))
             # println(Dict("Type"=>"Control","sv"=>sv_check_dict["Control"]))
             push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
         elseif ct.xj in [Set([1 // 3, -1 // 3])]
@@ -374,7 +374,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     else
         # chaotic map
         Bernoulli_map!(ct, i)
-        # sv_check_dict = Dict("Type"=>"Bernoulli","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+        # sv_check_dict = Dict("Type"=>"Bernoulli","sv"=>sv_check(ct.mps, ct._eps, ct.L))
         # println(Dict("Type"=>"Bernoulli","sv"=>sv_check_dict["Bernoulli"]))
         push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
         i=mod(((i+1) - 1),(ct.L) )+ 1
@@ -388,7 +388,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
                 p2=inner_prob(ct, [0], [pos])
                 n= rand(ct.rng_m) < p2 ? 0 : 1
                 P!(ct,[n],[pos])
-                # sv_check_dict = Dict("Type"=>"Projection","sv"=>sv_check(ct.mps, ct._cutoff, ct.L))
+                # sv_check_dict = Dict("Type"=>"Projection","sv"=>sv_check(ct.mps, ct._eps, ct.L))
                 # println(Dict("Type"=>"Projection","sv"=>sv_check_dict["Projection"]))
                 push!(op_l,Dict("Type"=>"Projection","Site"=>[pos],"Outcome"=>[n]))
             end
@@ -647,7 +647,7 @@ end
 """attach mps2 to mps1 at the last site. The returned mps is |mps1>|mps2>
 The physical index of mps2 should be given 
 """
-function attach_mps(mps1::MPS,mps2::MPS,cutoff::Float64=1e-10;replace_link=true)
+function attach_mps(mps1::MPS,mps2::MPS,eps::Float64=1e-30;replace_link=true)
     n1=length(mps1)
     n2=length(mps2)
     if replace_link
@@ -656,7 +656,7 @@ function attach_mps(mps1::MPS,mps2::MPS,cutoff::Float64=1e-10;replace_link=true)
     orthogonalize!(mps1,n1)
     mps_=mps1[n1]*mps2[1]
     lefttags=replace(string(tags(findinds(inds(mps_),"Link")[1])),r"l=[\d]+"=>"l=$(n1)",'"'=>"")
-    U,S,V=svd(mps_,inds(mps1[n1]),cutoff=cutoff,lefttags=lefttags)
+    U,S,V=svd(mps_,inds(mps1[n1]),cutoff=eps,lefttags=lefttags)
     mps_new=MPS(vcat(siteinds(mps1),siteinds(mps2)))
     for i in 1:(n1+n2)
         if i<n1
@@ -671,6 +671,7 @@ function attach_mps(mps1::MPS,mps2::MPS,cutoff::Float64=1e-10;replace_link=true)
     end
     return mps_new
 end
+
 function advance_link_tags!(mps::MPS,n::Int64)
     for i in 1:length(mps)
         links=findinds(mps[i],"Link")
@@ -800,10 +801,10 @@ function dw_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_ram:
     end
 end
 
-function von_Neumann_entropy(mps::MPS, i::Int; n::Int=1,positivedefinite=false,threshold::Float64=1e-30,sv=false)
+function von_Neumann_entropy(mps::MPS, i::Int, threshold::Float64; n::Int=1,positivedefinite=false,eps::Float64=1e-30,sv=false)
     println("from SvN, n=$n, threshold=$threshold")
     mps_ = orthogonalize(mps, i)
-    _, S = svd(mps_[i], (linkind(mps_, i),); cutoff=threshold)
+    _, S = svd(mps_[i], (linkind(mps_, i),); cutoff=eps)
     if sv
         return array(diag(S))
     end
