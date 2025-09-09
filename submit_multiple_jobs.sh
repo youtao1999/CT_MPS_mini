@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to submit multiple run_CT_MPS_1-3.slurm jobs
-# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=16 --P_RANGE="0.2:1.0:2" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --N_CHUNK_REALIZATIONS=1 --N_JOBS=2 --MEMORY=8G
+# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=24 --P_RANGE="0.2:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=100G
 
 # SLURM script
 SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.slurm"
