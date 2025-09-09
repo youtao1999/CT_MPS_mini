@@ -82,7 +82,7 @@ sacct | grep -v "\.ba\|\.ex" | awk '$6 == "OUT_OF_ME+" {print $1}'
 ###########################################
 
 # Request interactive session
-srun --nodes=1 --tasks-per-node=1 --cpus-per-task=1 --mem-per-cpu=16G --time=04:00:00 --pty bash
+srun --nodes=1 --tasks-per-node=6 --cpus-per-task=1 --mem-per-cpu=16G --time=04:00:00 --pty bash
 
 # Request specific node
 srun --nodelist=hal0079 --tasks-per-node=1 --cpus-per-task=1 --mem-per-cpu=4G --time=01:00:00 --pty bash

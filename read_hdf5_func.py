@@ -372,8 +372,8 @@ if __name__ == "__main__":
     # postprocessing.postprocessing()
     # print(postprocessing.counter, 'realizations * num_p_values')
 
-    # for threshold in np.logspace(-15, -5, 10):
-    #     postprocessing.h5_to_csv(threshold)
-    #     postprocessing.plot_from_csv(threshold)
+    for threshold in np.logspace(-15, -5, 10):
+        postprocessing.h5_to_csv(threshold)
+        postprocessing.plot_from_csv(threshold)
 
-    postprocessing.fixed_L_threshold_comparison_plot(L=24)
+    # postprocessing.fixed_L_threshold_comparison_plot(L=24)

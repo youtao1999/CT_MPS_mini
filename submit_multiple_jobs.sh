@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to submit multiple run_CT_MPS_1-3.slurm jobs
-# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=16 --P_RANGE="0.2:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --N_CHUNK_REALIZATIONS=10 --N_JOBS=200 --MEMORY=80G
+# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs.sh --L=16 --P_RANGE="0.2:1.0:2" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --N_CHUNK_REALIZATIONS=1 --N_JOBS=2 --MEMORY=8G
 
 # SLURM script
 SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.slurm"
@@ -73,5 +73,8 @@ fi
 
 # Submit N_JOBS number of jobs
 for i in $(seq 1 $N_JOBS); do
-    sbatch --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,N_CHUNK_REALIZATIONS=$N_CHUNK_REALIZATIONS,OUTPUT_DIR="$OUTPUT_DIR" --mem=$MEMORY $SLURM_SCRIPT
+    # Create a custom job name
+    JOB_NAME="CT_MPS_L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_job${i}"
+    
+    sbatch --job-name="$JOB_NAME" --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,N_CHUNK_REALIZATIONS=$N_CHUNK_REALIZATIONS,OUTPUT_DIR="$OUTPUT_DIR",JOB_NAME="$JOB_NAME" --mem=$MEMORY $SLURM_SCRIPT
 done
