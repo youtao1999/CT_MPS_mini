@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=CT_MPS   # Job name with L parameter
 #SBATCH --ntasks=6                # Number of tasks (processes)
+#SBATCH --requeue
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
 #SBATCH --time=10:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log

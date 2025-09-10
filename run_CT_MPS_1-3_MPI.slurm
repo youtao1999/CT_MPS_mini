@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=CT_MPS          # Job name
 #SBATCH --ntasks=10                # Number of tasks (processes)
+#SBATCH --requeue
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
 #SBATCH --mem-per-cpu=10G          # Memory per CPU core (4GB each)
 #SBATCH --time=10:00:00            # Time limit hrs:min:sec
