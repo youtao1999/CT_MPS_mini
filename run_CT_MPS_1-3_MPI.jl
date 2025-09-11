@@ -39,7 +39,7 @@ function main()
         println("L: ", args["L"])
         println("ancilla: ", args["ancilla"])
         println("maxdim: ", args["maxdim"])
-        println("cutoff: ", args["cutoff"])
+        println("threshold: ", args["threshold"])
         println("n_chunk_realizations: ", args["n_chunk_realizations"])
         println("Number of p values: ", length(p_range))
         println("Expected workers: ", min(size, length(p_range)))
@@ -96,7 +96,7 @@ function main()
                 p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
                 
                 # Get results as tuple with singular values
-                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
+                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
                 
                 result_count += 1
                 
@@ -137,7 +137,7 @@ function main()
                     p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
                     
                     # Get results as dictionary (scalar entropy only)
-                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["cutoff"],seed;sv=store_singular_values)
+                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
                     data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization number" => i, "worker_rank" => rank))
                     
                     # Write each result as a separate line (JSON Lines format)

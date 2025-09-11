@@ -9,14 +9,10 @@
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
 #SBATCH --partition=main
 #SBATCH --nodes=1                  # Force single node
-#SBATCH --ntasks-per-node=10       # All tasks on one node
 
 # Script to run CT_MPS simulation with MPI workers on a single node
 # Usage: ./run_CT_MPS_1-3_MPI.slurm [additional_args...]
 # Modeled after run_CT_MPS_1-3.slurm
-
-# Set number of workers (default 20, can be overridden)
-NWORKERS=10
 
 # Default values if not provided via environment variables (following SLURM script pattern)
 : ${L:=10}
@@ -25,9 +21,10 @@ NWORKERS=10
 : ${P_FIXED_VALUE:=0.5}
 : ${ANCILLA:=0}
 : ${MAXDIM:=512} # julia Typemax(Int)
-: ${CUTOFF:=1e-10}
-: ${N_CHUNK_REALIZATIONS:=10}  # Default 20 realizations for 20 workers
-: ${OUTPUT_DIR:="/scratch/ty296/hdf5_data"}
+: ${THRESHOLD:=1e-10}
+: ${REALIZATIONS_PER_CPU:=1}
+: ${N_CHUNK_REALIZATIONS:=$((REALIZATIONS_PER_CPU * SLURM_NTASKS))}
+: ${OUTPUT_DIR:="/scratch/ty296/test_output"}
 : ${JOB_ID:=$SLURM_JOB_ID}  # Use SLURM job ID if available, fallback to timestamp
 
 # Module loading (following SLURM script pattern)
@@ -51,15 +48,15 @@ mkdir -p $OUTPUT_DIR
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
 # Temporarily removing sysimage to test MPI configuration
-mpirun -n $NWORKERS julia --project=/scratch/ty296/CT_MPS_mini/CT \
-    run_CT_MPS_1-3_MPI.jl \
+mpirun -n $SLURM_NTASKS julia --sysimage /scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT \
+    /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
     --L $L \
     --p_range "$P_RANGE" \
     --p_fixed_name $P_FIXED_NAME \
     --p_fixed_value $P_FIXED_VALUE \
     --ancilla $ANCILLA \
     --maxdim $MAXDIM \
-    --cutoff $CUTOFF \
+    --threshold $THRESHOLD \
     --n_chunk_realizations $N_CHUNK_REALIZATIONS \
     --job_id $JOB_ID \
     --random \
