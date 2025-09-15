@@ -20,10 +20,10 @@ module load julia
 
 
 # Restrict Julia threads to 1
-export JULIA_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export OMP_NUM_THREADS=1
-export OPENBLAS_NUM_THREADS=1
+export JULIA_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OMP_NUM_THREADS=2
+# export OPENBLAS_NUM_THREADS=2
 
 # Debug: Print all variables
 echo "=== DEBUG: Variable values ==="
@@ -47,4 +47,4 @@ julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratc
 
 # delete the --random flag when requiring a fixed seed
 
-# julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L 12 --p_range "0.5,0.6" --p_fixed_name p_ctrl --p_fixed_value 0.5 --ancilla 0 --maxdim 512 --threshold $THRESHOLD --n_chunk_realizations 1 --random --store_sv
+# srun --time=01:00:00 --mem=10G julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L 12 --p_range "0.5" --p_fixed_name p_ctrl --p_fixed_value 0.4 --ancilla 0 --maxdim 512 --threshold 1e-15 --n_chunk_realizations 1 --job_id 42--random --store_sv

@@ -29,7 +29,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
         # println(sv_check_dict)
-        println("maxrss: ", Sys.maxrss() / 1024^2, " MB")
+        println(idx, " maxrss: ", Sys.maxrss() / 1024^2, " MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -329,7 +329,7 @@ function parse_my_args()
         help = "job id"
         "--output_dir", "-o"
         arg_type = String
-        default = "/scratch/ty296/json_data"
+        default = "/scratch/ty296/test_output"
         help = "output directory"
         "--store_sv"
         action = :store_true
