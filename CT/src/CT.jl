@@ -45,6 +45,7 @@ mutable struct CT_MPS
     dw::Vector{Vector{Union{MPO,Nothing}}}
     debug::Bool
     simplified_U::Bool
+    builtin::Bool
 end
 
 function CT_MPS(
@@ -65,6 +66,7 @@ function CT_MPS(
     _maxdim::Int=typemax(Int),
     debug::Bool=false,
     simplified_U::Bool=false,
+    builtin::Bool=false,
     )
     rng = MersenneTwister(seed)
     rng_vec = seed_vec === nothing ? rng : MersenneTwister(seed_vec)
@@ -74,7 +76,7 @@ function CT_MPS(
     mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
     dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
-    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _eps, _maxdim, mps, [],[],adder,dw,debug,simplified_U)
+    ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _eps, _maxdim, mps, [],[],adder,dw,debug,simplified_U,builtin)
     return ct
 end
 
@@ -143,18 +145,44 @@ apply the operator `op` to `mps`, the `op` should have indices of (i,j,k.. i',j'
 the orthogonalization center is at i
 index should be ram index
 """
+
+function find_matching_site_indices(tensor1, tensor2)
+    matches = []
+    
+    for ind1 in inds(tensor1)
+        if hastags(ind1, "Site")  # Check if it's a Site index
+            for ind2 in inds(tensor2)
+                if hastags(ind2, "Site") && tags(ind1) == tags(ind2)
+                    # Found matching Site indices with identical tags
+                    push!(matches, (ind1, ind2))
+                    # println("Match found: $(tags(ind1)) - IDs: $(id(ind1)) <-> $(id(ind2))")
+                end
+            end
+        end
+    end
+    
+    return matches
+end
+
 function apply_op!(mps::MPS, op::ITensor, eps::Float64, maxdim::Int)
     i_list = [parse(Int, replace(string(tags(inds(op)[i])[length(tags(inds(op)[i]))]), "n=" => "")) for i in 1:div(length(op.tensor.inds), 2)]
     sort!(i_list)
-    # println(i_list)
     orthogonalize!(mps, i_list[1])
     mps_ij = mps[i_list[1]]
     for idx in i_list[1]+1:i_list[end]
         mps_ij *= mps[idx]
     end
-    mps_ij *= op 
+
+    matches = find_matching_site_indices(op, mps_ij)
+    for match in matches
+        if plev(match[1]) == 0
+            op = replaceinds(op, [match[1]], [match[2]])
+        else
+            op = replaceinds(op, [match[1]], [prime(match[2])])
+        end
+    end
+    mps_ij *= op # this line is the problem; the indices are not being contracted but rather they are tensored 
     noprime!(mps_ij)
-    
     if length(i_list) == 1
         mps[i_list[1]] = mps_ij
     else
@@ -170,6 +198,7 @@ function apply_op!(mps::MPS, op::ITensor, eps::Float64, maxdim::Int)
     end
     return
 end
+
 """ apply Bernoulli_map to physical site i
 """
 function Bernoulli_map!(ct::CT_MPS, i::Int)
@@ -178,7 +207,7 @@ end
 
 """ apply scrambler (Haar random unitary) to site (i,i+1) [physical index]
 """
-function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; builtin=false, theta=nothing)
+function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; theta=nothing)
     # U=ITensor(1.)
     # U *= randomUnitary(linkind(mps,i), linkind(mps,i+1))
     # mps[i] *= U
@@ -190,6 +219,7 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; bu
             # println(i,false)
         else
             U_4_mat = U_simp(true, rng, theta)
+            # println(U_4_mat)
             # println(i,true)
         end
     else
@@ -200,9 +230,9 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; bu
     if ct.ancilla == 0 || ct.ancilla ==1
         ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
         U_4_tensor = ITensor(U_4, ct.qubit_site[ram_idx[1]], ct.qubit_site[ram_idx[2]], ct.qubit_site[ram_idx[1]]', ct.qubit_site[ram_idx[2]]')
-        # return U_4_tensor
-        if builtin
-            ct.mps=apply(U_4_tensor,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
+        
+        if ct.builtin
+            ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
         else
             apply_op!(ct.mps, U_4_tensor,ct._eps,ct._maxdim)
         end
@@ -411,47 +441,64 @@ function update_history(ct::CT_MPS,op::Vector{Any},p_0::Float64)
     end
 end
 
-function random_control_fixed_circuit!(ct::CT_MPS, i::Int, circuit)
+function random_control_fixed_circuit!(ct::CT_MPS, i::Int, cir::Vector{Any})
+    """
+    circuit is a vector of vectors, each vector contains the type of operation, the site, the outcome, and the rng_m
+    for control map: cir = ["C"]
+    for projection map: cir = ["P", outcome, rng_m]
+    for U map: cir = ["U", theta]
+    """
     op_l=[]
     p_0=-1.  # -1 for not applicable because of Bernoulli map
-    for cir in circuit
-        # control map
-        if cir[1] == "C"
-            if ct.xj in Set([Set([1 // 3, 2 // 3]),Set([0])])
-                p_0= inner_prob(ct, [0], [i])
-                if ct.debug
-                    println("Born prob for measuring 0 at phy site $i is $p_0")
-                end
-                n =  rand(ct.rng_m) < p_0 ?  0 : 1
-                control_map(ct, [n], [i])
-                push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
-            elseif ct.xj in [Set([1 // 3, -1 // 3])]
-                # p_00= ...
-                # p_01= ...
-                # p_10= ...
-                # p_11= ...
-                # n = ...
-                # control_map(ct, n, [i, i+1])
-                nothing
-            end
+    # control map
+    if cir[1] == "C"
+        if ct.xj in Set([Set([1 // 3, 2 // 3]),Set([0])])
+            p_0= inner_prob(ct, [0], [i])
             if ct.debug
-                print("Control with $(i)")
+                println("Born prob for measuring 0 at phy site $i is $p_0")
             end
-            i=mod(((i-1) - 1),(ct.L)) + 1
-            if ct.debug
-                println("=> Next i is $(i)")
-            end
-        elseif cir[1] == "U"
-            # chaotic map
-            S!(ct, i,nothing; theta=cir[2:end])
-            push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
-            i=mod(((i+1) - 1),(ct.L) )+ 1
-        else
-            error("Unknown operation $(cir[1]) in circuit")
+            n =  rand(ct.rng_m) < p_0 ?  0 : 1
+            control_map(ct, [n], [i])
+            push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
+        elseif ct.xj in [Set([1 // 3, -1 // 3])]
+            # p_00= ...
+            # p_01= ...
+            # p_10= ...
+            # p_11= ...
+            # n = ...
+            # control_map(ct, n, [i, i+1])
+            nothing
         end
-        update_history(ct,op_l,p_0)
+        if ct.debug
+            print("Control with $(i)")
+        end
+        i=mod(((i-1) - 1),(ct.L)) + 1
+        if ct.debug
+            println("=> Next i is $(i)")
+        end
+    elseif cir[1] == "P"
+        for pos in [i-1,i]
+            pos=mod((pos-1),ct.L)+1
+            p2=inner_prob(ct, [cir[2]], [pos])
+            n= cir[3] < p2 ? 0 : 1
+            P!(ct,[n],[pos])
+        end
+        # P!(ct, [cir[2]], [i])
+        push!(op_l,Dict("Type"=>"Projection","Site"=>[i],"Outcome"=>[cir[2]],"rng_m"=>cir[3]))
+        i=mod(((i-1) - 1),(ct.L)) + 1
+        if ct.debug
+            println("=> Next i is $(i)")
+        end
+    elseif cir[1] == "U"
+        # chaotic map
+        # println(cir[2:end])
+        S!(ct, i, nothing; theta=cir[2:end])
+        push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
+        i=mod(((i+1) - 1),(ct.L) )+ 1
+    else    
+        error("Unknown operation $(cir[1]) in circuit")
     end
-    
+    update_history(ct,op_l,p_0)
     return i
 end
 
