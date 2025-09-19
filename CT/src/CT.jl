@@ -208,24 +208,41 @@ end
 """ apply scrambler (Haar random unitary) to site (i,i+1) [physical index]
 """
 function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; theta=nothing)
-    # U=ITensor(1.)
-    # U *= randomUnitary(linkind(mps,i), linkind(mps,i+1))
-    # mps[i] *= U
-    # mps[i+1] *= U
-    # return
+    # println("theta = ", theta)
     if ct.simplified_U
+        # print("simplified U!!")
         if i==ct.L
-            U_4_mat = U_simp(false, rng, theta)
-            # println(i,false)
+            U_4_mat = U_simp(false, nothing, theta)
+            println("i == L, U_4_mat = ", U_4_mat)
+
         else
-            U_4_mat = U_simp(true, rng, theta)
-            # println(U_4_mat)
-            # println(i,true)
+            U_4_mat = U_simp(true, nothing, theta)
+            println("i != L, U_4_mat = ", U_4_mat)
         end
     else
         U_4_mat=U(4,rng)
     end
-    
+    U_4 = reshape(U_4_mat, 2, 2, 2, 2)
+    if ct.ancilla == 0 || ct.ancilla ==1
+        ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
+        U_4_tensor = ITensor(U_4, ct.qubit_site[ram_idx[1]], ct.qubit_site[ram_idx[2]], ct.qubit_site[ram_idx[1]]', ct.qubit_site[ram_idx[2]]')
+        
+        if ct.builtin
+            ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
+        else
+            apply_op!(ct.mps, U_4_tensor,ct._eps,ct._maxdim)
+        end
+
+        if ct.debug
+            println("U $(U_4_mat) apply to $(i)")
+        end
+    elseif ct.ancilla ==2
+        nothing
+    end
+end
+
+function S_fixed!(ct::CT_MPS, i::Int, U_4_mat::Matrix{ComplexF64})
+    # println(U_4_mat)
     U_4 = reshape(U_4_mat, 2, 2, 2, 2)
     if ct.ancilla == 0 || ct.ancilla ==1
         ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
@@ -261,6 +278,7 @@ end
 function R!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     P!(ct, n, i)
     if ct.xj in Set([Set([1 // 3, 2 // 3]),Set([0])])
+        println("Resetting $(i) with outcome $(n)")
         if n[1]==1
             X!(ct,i[1])
             # print("X")
@@ -446,7 +464,7 @@ function random_control_fixed_circuit!(ct::CT_MPS, i::Int, cir::Vector{Any})
     circuit is a vector of vectors, each vector contains the type of operation, the site, the outcome, and the rng_m
     for control map: cir = ["C"]
     for projection map: cir = ["P", outcome, rng_m]
-    for U map: cir = ["U", theta]
+    for Bernoulli map: cir = ["B", theta]
     """
     op_l=[]
     p_0=-1.  # -1 for not applicable because of Bernoulli map
@@ -457,7 +475,7 @@ function random_control_fixed_circuit!(ct::CT_MPS, i::Int, cir::Vector{Any})
             if ct.debug
                 println("Born prob for measuring 0 at phy site $i is $p_0")
             end
-            n =  rand(ct.rng_m) < p_0 ?  0 : 1
+            n =  cir[2] < p_0 ?  0 : 1
             control_map(ct, [n], [i])
             push!(op_l,Dict("Type"=>"Control","Site"=>[i],"Outcome"=>[n]))
         elseif ct.xj in [Set([1 // 3, -1 // 3])]
@@ -489,12 +507,12 @@ function random_control_fixed_circuit!(ct::CT_MPS, i::Int, cir::Vector{Any})
         if ct.debug
             println("=> Next i is $(i)")
         end
-    elseif cir[1] == "U"
-        # chaotic map
+    elseif cir[1] == "B"
+        # bernoulli map
         # println(cir[2:end])
-        S!(ct, i, nothing; theta=cir[2:end])
-        push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
         i=mod(((i+1) - 1),(ct.L) )+ 1
+        S_fixed!(ct, i, cir[2])
+        push!(op_l,Dict("Type"=>"Bernoulli","Site"=>[i,((i+1) - 1)%(ct.L) + 1],"Outcome"=>nothing))
     else    
         error("Unknown operation $(cir[1]) in circuit")
     end
