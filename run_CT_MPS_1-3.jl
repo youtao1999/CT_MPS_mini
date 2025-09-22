@@ -29,7 +29,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
         # println(sv_check_dict)
-        println(idx, " maxrss: ", Sys.maxrss() / 1024^2, " MB")
+        println(idx, " heap memory usage: ", Base.gc_live_bytes()/ 1024^2, " MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -324,9 +324,9 @@ function parse_my_args()
         "--n_chunk_realizations", "-n"
         arg_type = Int
         help = "number of realizations handled per cpu worker"
-        "--job_id", "-j"
+        "--job_counter", "-c"
         arg_type = Int
-        help = "job id"
+        help = "job counter"
         "--output_dir", "-o"
         arg_type = String
         default = "/scratch/ty296/test_output"
@@ -367,7 +367,7 @@ function main()
     # println("random: ", args["random"])
     if store_singular_values
         # Use HDF5 format for large singular value arrays
-        filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).h5"
+        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).h5"
         result_count = 0
         
         #scan over p_range
@@ -380,7 +380,7 @@ function main()
                 if args["random"]
                     seed = rand(1:10000)
                 else
-                    seed = 0
+                    seed = i + args["job_counter"] * args["n_chunk_realizations"] - 1
                 end
                 # Get results as tuple with singular values
                 @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
@@ -399,7 +399,7 @@ function main()
         
     else
         # Use JSON format for scalar entropy values only
-        filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
+        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).json"
         result_count = 0
         
         open(filename, "w") do f
@@ -413,7 +413,7 @@ function main()
                     if args["random"]
                         seed = rand(1:10000)
                     else
-                        seed = 0
+                        seed = i + args["job_counter"] * args["n_chunk_realizations"] - 1
                     end 
                     
                     # Get results as dictionary (scalar entropy only)
