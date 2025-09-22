@@ -22,7 +22,7 @@ end
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0)
     println("seed: ", seed)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim, builtin=true)
     i=1
     # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
@@ -380,7 +380,7 @@ function main()
                 if args["random"]
                     seed = rand(1:10000)
                 else
-                    seed = i + args["job_counter"] * args["n_chunk_realizations"] - 1
+                    seed = i - 1 + (args["job_counter"] - 1) * args["n_chunk_realizations"]
                 end
                 # Get results as tuple with singular values
                 @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
@@ -413,7 +413,7 @@ function main()
                     if args["random"]
                         seed = rand(1:10000)
                     else
-                        seed = i + args["job_counter"] * args["n_chunk_realizations"] - 1
+                        seed = i - 1 + (args["job_counter"] - 1) * args["n_chunk_realizations"]
                     end 
                     
                     # Get results as dictionary (scalar entropy only)

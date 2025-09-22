@@ -48,4 +48,6 @@ julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratc
 
 # delete the --random flag when requiring a fixed seed
 
-# srun --time=01:00:00 --mem=10G julia --heap-size-hint=5G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L 20 --p_range "0.5" --p_fixed_name p_ctrl --p_fixed_value 0.0 --ancilla 0 --maxdim 512 --threshold 1e-15 --n_chunk_realizations 1 --job_counter 1 --random --store_sv
+# srun --time=01:00:00 --mem=10G julia --heap-size-hint=10G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L 20 --p_range "0.5" --p_fixed_name p_ctrl --p_fixed_value 0.0 --ancilla 0 --maxdim 512 --threshold 1e-15 --n_chunk_realizations 1 --job_counter 1 --store_sv
+
+# srun --time=01:00:00 --mem=10G julia --heap-size-hint=10G --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L 20 --p_range "0.5" --p_fixed_name p_ctrl --p_fixed_value 0.4 --ancilla 0 --maxdim 512 --threshold 1e-15 --n_chunk_realizations 1 --job_counter 1 --store_sv
