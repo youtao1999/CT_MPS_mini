@@ -181,7 +181,7 @@ function apply_op!(mps::MPS, op::ITensor, eps::Float64, maxdim::Int)
             op = replaceinds(op, [match[1]], [prime(match[2])])
         end
     end
-    mps_ij *= op # this line is the problem; the indices are not being contracted but rather they are tensored 
+    mps_ij *= op  
     noprime!(mps_ij)
     if length(i_list) == 1
         mps[i_list[1]] = mps_ij

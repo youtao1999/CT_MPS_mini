@@ -22,14 +22,14 @@ end
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0)
     println("seed: ", seed)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim, builtin=true)
     i=1
     # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
         # println(sv_check_dict)
-        println(idx, " maxrss: ", Sys.maxrss() / 1024^2, " MB")
+        println(idx, " heap memory usage: ", Base.gc_live_bytes()/ 1024^2, " MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
@@ -324,9 +324,9 @@ function parse_my_args()
         "--n_chunk_realizations", "-n"
         arg_type = Int
         help = "number of realizations handled per cpu worker"
-        "--job_id", "-j"
+        "--job_counter", "-c"
         arg_type = Int
-        help = "job id"
+        help = "job counter"
         "--output_dir", "-o"
         arg_type = String
         default = "/scratch/ty296/test_output"
@@ -367,7 +367,7 @@ function main()
     # println("random: ", args["random"])
     if store_singular_values
         # Use HDF5 format for large singular value arrays
-        filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).h5"
+        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).h5"
         result_count = 0
         
         #scan over p_range
@@ -376,11 +376,11 @@ function main()
             p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
             p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
             
-            for i in 1:args["n_chunk_realizations"]
+            for i in 1:(args["n_chunk_realizations"])
                 if args["random"]
                     seed = rand(1:10000)
                 else
-                    seed = 0
+                    seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
                 end
                 # Get results as tuple with singular values
                 @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
@@ -399,7 +399,7 @@ function main()
         
     else
         # Use JSON format for scalar entropy values only
-        filename = "$(args["output_dir"])/$(args["job_id"])_a$(args["ancilla"])_L$(args["L"]).json"
+        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).json"
         result_count = 0
         
         open(filename, "w") do f
@@ -409,11 +409,11 @@ function main()
                 p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
                 p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
                 
-                for i in 1:args["n_chunk_realizations"]
+                for i in 1:(args["n_chunk_realizations"])
                     if args["random"]
                         seed = rand(1:10000)
                     else
-                        seed = 0
+                        seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
                     end 
                     
                     # Get results as dictionary (scalar entropy only)
