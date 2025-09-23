@@ -376,11 +376,11 @@ function main()
             p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
             p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
             
-            for i in 1:args["n_chunk_realizations"]
+            for i in 1:(args["n_chunk_realizations"])
                 if args["random"]
                     seed = rand(1:10000)
                 else
-                    seed = i - 1 + (args["job_counter"] - 1) * args["n_chunk_realizations"]
+                    seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
                 end
                 # Get results as tuple with singular values
                 @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
@@ -409,11 +409,11 @@ function main()
                 p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
                 p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
                 
-                for i in 1:args["n_chunk_realizations"]
+                for i in 1:(args["n_chunk_realizations"])
                     if args["random"]
                         seed = rand(1:10000)
                     else
-                        seed = i - 1 + (args["job_counter"] - 1) * args["n_chunk_realizations"]
+                        seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
                     end 
                     
                     # Get results as dictionary (scalar entropy only)
