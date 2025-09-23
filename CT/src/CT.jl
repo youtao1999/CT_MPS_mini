@@ -242,7 +242,7 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; th
 end
 
 function S_fixed!(ct::CT_MPS, i::Int, U_4_mat::Matrix{ComplexF64})
-    # println(U_4_mat)
+    # println("U_4_mat: ", U_4_mat)
     U_4 = reshape(U_4_mat, 2, 2, 2, 2)
     if ct.ancilla == 0 || ct.ancilla ==1
         ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
