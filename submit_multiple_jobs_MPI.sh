@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # Script to submit multiple run_CT_MPS_1-3_MPI.slurm jobs
-# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs_MPI.sh --L=20 --P_RANGE="0.5:1.0:20" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --REALIZATIONS_PER_CPU=1 --N_JOBS=200 --MEM_PER_CPU=40G --N_TASKS=10
+# Usage: /scratch/ty296/CT_MPS_mini/submit_multiple_jobs_MPI.sh --SEED_RANGE="100:105:1" --L=8 --P_RANGE="0.5" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --REALIZATIONS_PER_CPU=1 --MEM_PER_CPU=4G --OUTPUT_DIR="/scratch/ty296/hdf5_data/test_MPI"
 
 # SLURM script
 SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.slurm"
+
+source /scratch/ty296/CT_MPS_mini/parse_seed_range.sh
 
 # Set default values (matching run_CT_MPS_1-3_MPI.slurm)
 : ${MEM_PER_CPU:=10G}  # Default memory per cpu if not specified
@@ -16,6 +18,10 @@ SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.slurm"
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --SEED_RANGE=*)
+            SEED_RANGE="${1#*=}"
+            shift
+            ;;
         --L=*)
             L="${1#*=}"
             shift
@@ -44,10 +50,6 @@ while [[ $# -gt 0 ]]; do
             REALIZATIONS_PER_CPU="${1#*=}"
             shift
             ;;
-        --N_JOBS=*)
-            N_JOBS="${1#*=}"
-            shift
-            ;;
         --MEM_PER_CPU=*)
             MEM_PER_CPU="${1#*=}"
             shift
@@ -72,6 +74,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+
+# Validate required parameters
+if [[ -z "$SEED_RANGE" ]]; then
+    echo "Error: --SEED_RANGE is required"
+    echo "Example: --SEED_RANGE='0:100:10'"
+    exit 1
+fi
+
+# Parse the seed range
+if ! parse_seed_range "$SEED_RANGE"; then
+    echo "Failed to parse seed range: $SEED_RANGE"
+    exit 1
+fi
+
 # Create output directory if it doesn't exist (only if not already set)
 if [ -z "$OUTPUT_DIR" ]; then
     OUTPUT_DIR="/scratch/ty296/hdf5_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
@@ -81,10 +97,12 @@ if [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 
-# Submit N_JOBS number of jobs
-for i in $(seq 1 $N_JOBS); do
+# Submit number of jobs
+for i in $(seq $SEED_INITIAL $SEED_STEP $SEED_FINAL); do
     # Create a custom job name
-    JOB_NAME="CT_MPS_L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_job${i}"
-    
-    sbatch --job-name="$JOB_NAME" --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,OUTPUT_DIR="$OUTPUT_DIR",REALIZATIONS_PER_CPU=$REALIZATIONS_PER_CPU --ntasks=$N_TASKS --mem-per-cpu=$MEM_PER_CPU $SLURM_SCRIPT
+    JOB_NAME="L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_job${i}"
+    echo "Submitting job: $JOB_NAME"
+    sbatch --job-name="$JOB_NAME" --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,OUTPUT_DIR="$OUTPUT_DIR",REALIZATIONS_PER_CPU=$REALIZATIONS_PER_CPU,JOB_COUNTER=$i,N_CHUNK_REALIZATIONS=$SEED_STEP --ntasks=$SEED_STEP --mem-per-cpu=$MEM_PER_CPU $SLURM_SCRIPT
+
+    # set the N_TASKS to the number of seeds per job
 done

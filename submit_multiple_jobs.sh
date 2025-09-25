@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enhanced script to submit multiple jobs with seed range parsing
-# Usage: ./submit_multiple_jobs.sh --SEED_RANGE="0:10:2" --L=8 --P_RANGE="0.5" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --MEMORY=8G
+# Usage: ./submit_multiple_jobs.sh --SEED_RANGE="100:200:1" --L=20 --P_RANGE="0.5" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.4 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --MEMORY=200G --OUTPUT_DIR="/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5"
 
 # Source the seed parsing function
 source /scratch/ty296/CT_MPS_mini/parse_seed_range.sh
@@ -12,8 +12,8 @@ SLURM_SCRIPT="/scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.slurm"
 # Set default values
 : ${MEMORY:=4G}
 : ${THRESHOLD:=1e-15}
-: ${SEED_STEP:=1}
 : ${MAXDIM:=64}
+: ${N_CHUNK_REALIZATIONS:=1}
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -54,6 +54,10 @@ while [[ $# -gt 0 ]]; do
             THRESHOLD="${1#*=}"
             shift
             ;;
+        --OUTPUT_DIR=*)
+            OUTPUT_DIR="${1#*=}"
+            shift
+            ;;
         --help)
             echo "Usage: $0 --SEED_RANGE='initial:final:step' [other options]"
             echo "Example: $0 --SEED_RANGE='0:100:10' --L=20 --P_RANGE='0.5:1.0:20'"
@@ -81,18 +85,23 @@ if ! parse_seed_range "$SEED_RANGE"; then
 fi
 
 # Create output directory if it doesn't exist
-OUTPUT_DIR="/scratch/ty296/hdf5_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
+# OUTPUT_DIR="/scratch/ty296/hdf5_data/${P_FIXED_NAME}${P_FIXED_VALUE}"
 if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
 
-echo "Submitting $NUM_JOBS jobs with seed ranges: $SEED_RANGE"
+echo "SEED_INITIAL: $SEED_INITIAL"
+echo "SEED_FINAL: $SEED_FINAL"
+echo "SEED_STEP: $SEED_STEP"
+echo "NUM_JOBS: $NUM_JOBS"
+# echo "Submitting $NUM_JOBS jobs with seed ranges: $SEED_RANGE"
+# # echo "N_CHUNK_REALIZATIONS: $SEED_STEP"
 
 # Submit jobs based on parsed seed range
-for ((job_id=0; job_id<NUM_JOBS; job_id++)); do
+for ((job_id=SEED_INITIAL; job_id<SEED_FINAL; job_id+=SEED_STEP)); do
     # Create a custom job name
-    JOB_NAME="CT_MPS_L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_seeds${job_id}"
-    
+    JOB_NAME="L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_job${job_id}"
+    echo "Submitting job: $JOB_NAME"
     # Submit the job with seed parameters
     sbatch --job-name="$JOB_NAME" \
            --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,N_CHUNK_REALIZATIONS=$SEED_STEP,OUTPUT_DIR="$OUTPUT_DIR",JOB_NAME="$JOB_NAME",JOB_COUNTER=$job_id \

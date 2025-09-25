@@ -30,6 +30,7 @@ function main()
     p_range = parse_p_range(args["p_range"])
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = args["p_fixed_value"]
+    job_counter = args["job_counter"]
     
     # Only master process prints the full configuration
     if rank == 0
@@ -60,7 +61,7 @@ function main()
     
     println("Worker $rank assigned realizations: $start_realization to $end_realization ($realizations_per_worker total)")
     println("Worker $rank will compute all p values: ", p_range)
-    println("Worker $rank job_id: $(args["job_id"])")
+    println("Worker $rank job_id: $(args["job_counter"])")
     println("Worker $rank output_dir: $(args["output_dir"])")
     
     # Choose storage format based on command line argument
@@ -72,7 +73,7 @@ function main()
         # Add hostname and process ID for extra uniqueness
         hostname = gethostname()
         pid = getpid()
-        filename = "$(args["output_dir"])/$(args["p_fixed_name"])$(args["p_fixed_value"])_$(args["job_id"])_worker$(rank)_$(hostname)_$(pid)_L$(args["L"]).h5"
+        filename = "$(args["output_dir"])/$(args["p_fixed_name"])$(args["p_fixed_value"])_$(args["job_counter"])_worker$(rank)_$(hostname)_$(pid)_L$(args["L"]).h5"
         println("Worker $rank will write to file: $filename")
         result_count = 0
         
@@ -84,7 +85,7 @@ function main()
                 # All workers use the same seed for the same realization number
                 seed = rand(1:10000)
             else
-                seed = i  # Use realization number as seed
+                seed = i + job_counter # Use realization number as seed
             end
             
             println("Worker $rank processing realization $i with seed $seed")
@@ -113,7 +114,7 @@ function main()
     else
         # Use JSON format for scalar entropy values only
         # Each worker writes to its own file to avoid conflicts
-        filename = "$(args["output_dir"])/$(args["job_id"])_worker$(rank)_a$(args["ancilla"])_L$(args["L"]).json"
+        filename = "$(args["output_dir"])/$(args["job_counter"])_worker$(rank)_a$(args["ancilla"])_L$(args["L"]).json"
         result_count = 0
         
         open(filename, "w") do f
@@ -125,7 +126,7 @@ function main()
                     # All workers use the same seed for the same realization number
                     seed = rand(1:10000)
                 else
-                    seed = i  # Use realization number as seed
+                    seed = i + job_counter # Use realization number as seed
                 end
                 
                 println("Worker $rank processing realization $i with seed $seed")
