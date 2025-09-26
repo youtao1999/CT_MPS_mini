@@ -37,19 +37,19 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
         if sv
             sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
             # println(length(sv_arr), "lower bound sv: ", sv_arr[end])
-            return O, sv_arr, max_bond
+            return O, sv_arr, max_bond, ct_f._eps
         else
             EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;n=n)
             # ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
-            return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
+            return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n, "eps" => ct_f._eps)
         end
     else
         if sv
             SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;sv=sv)
-            return O, SA, max_bond
+            return O, SA, max_bond, ct_f._eps
         else
             SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;n=n)
-            return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n)
+            return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n, "eps" => ct_f._eps)
         end
     end
 end
@@ -383,7 +383,7 @@ function main()
                     seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
                 end
                 # Get results as tuple with singular values
-                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
+                @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
                 
                 result_count += 1
                 

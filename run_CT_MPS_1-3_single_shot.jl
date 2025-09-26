@@ -7,9 +7,9 @@ Store a single result directly to HDF5 file, optimized for large singular value 
 Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
 """
-function store_result_hdf5(filename::String, singular_values::Array{Float64, 1}, max_bond::Int, 
+function store_result_hdf5(filename::String, singular_values::Array{Float64, 1}, max_bond::Int, O::Float64,
                           p_ctrl::Float64, p_proj::Float64, 
-                          args::Dict, seed::Int)
+                          args::Dict, seed::Int, _eps::Float64)
     
     # # Delete file if it exists to ensure clean overwrite
     if isfile(filename)
@@ -27,7 +27,8 @@ function store_result_hdf5(filename::String, singular_values::Array{Float64, 1},
         attributes(sv_dataset)["L"] = args["L"]
         attributes(sv_dataset)["ancilla"] = args["ancilla"]
         attributes(sv_dataset)["maxdim"] = args["maxdim"]
-        attributes(sv_dataset)["threshold"] = args["threshold"]
+        attributes(sv_dataset)["max_bond"] = max_bond
+        attributes(sv_dataset)["O"] = O
         attributes(sv_dataset)["seed"] = seed
         attributes(sv_dataset)["p_ctrl"] = p_ctrl
         attributes(sv_dataset)["p_proj"] = p_proj
@@ -56,7 +57,8 @@ function read_hdf5(filename::String)
         metadata["L"] = read(attrs["L"])
         metadata["ancilla"] = read(attrs["ancilla"])
         metadata["maxdim"] = read(attrs["maxdim"])
-        metadata["threshold"] = read(attrs["threshold"])
+        metadata["max_bond"] = read(attrs["max_bond"])
+        metadata["O"] = read(attrs["O"])
         metadata["seed"] = read(attrs["seed"])
         metadata["p_ctrl"] = read(attrs["p_ctrl"])
         metadata["p_proj"] = read(attrs["p_proj"])
@@ -133,12 +135,12 @@ function main()
     p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p_vary
     p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p_vary
     # Get results as tuple with singular values
-    @time O, sv_array, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["seed"];sv=true)
+    @time O, sv_array, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["seed"];sv=true)
     
     
     # Store result directly to HDF5
-    store_result_hdf5(filename, sv_array, max_bond, 
-                    p_ctrl, p_proj, args, args["seed"])
+    store_result_hdf5(filename, sv_array, max_bond, O,
+                    p_ctrl, p_proj, args, args["seed"], _eps)
     
     println("Stored result to HDF5")    
 end
