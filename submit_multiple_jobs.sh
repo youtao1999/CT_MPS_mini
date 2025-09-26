@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enhanced script to submit multiple jobs with seed range parsing
-# Usage: ./submit_multiple_jobs.sh --SEED_RANGE="100:200:1" --L=20 --P_RANGE="0.5" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.4 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --MEMORY=200G --OUTPUT_DIR="/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5"
+# Usage: ./submit_multiple_jobs.sh --SEED_RANGE="0:100:1" --L=20 --P_RANGE="0.6" --P_FIXED_NAME="p_ctrl" --P_FIXED_VALUE=0.0 --ANCILLA=0 --MAXDIM=512 --THRESHOLD=1e-15 --MEMORY=150G --OUTPUT_DIR="/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5"
 
 # Source the seed parsing function
 source /scratch/ty296/CT_MPS_mini/parse_seed_range.sh
@@ -101,8 +101,12 @@ echo "NUM_JOBS: $NUM_JOBS"
 for ((job_id=SEED_INITIAL; job_id<SEED_FINAL; job_id+=SEED_STEP)); do
     # Create a custom job name
     JOB_NAME="L${L}_${P_FIXED_NAME}${P_FIXED_VALUE}_job${job_id}"
-    echo "Submitting job: $JOB_NAME"
+    # echo "Submitting job: $JOB_NAME"
     # Submit the job with seed parameters
+    # echo "p_range: $P_RANGE"
+
+    # srun --time=01:00:00 --mem=10G julia --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3.jl --L $L --p_range "$P_RANGE" --p_fixed_name "$P_FIXED_NAME" --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --threshold $THRESHOLD --n_chunk_realizations $SEED_STEP --output_dir "$OUTPUT_DIR" --job_counter $job_id --store_sv
+
     sbatch --job-name="$JOB_NAME" \
            --export=ALL,L=$L,P_RANGE="$P_RANGE",P_FIXED_NAME="$P_FIXED_NAME",P_FIXED_VALUE=$P_FIXED_VALUE,ANCILLA=$ANCILLA,MAXDIM=$MAXDIM,THRESHOLD=$THRESHOLD,N_CHUNK_REALIZATIONS=$SEED_STEP,OUTPUT_DIR="$OUTPUT_DIR",JOB_NAME="$JOB_NAME",JOB_COUNTER=$job_id \
            --mem=$MEMORY \
