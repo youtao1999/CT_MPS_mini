@@ -7,7 +7,7 @@ Store a single result directly to HDF5 file, optimized for large singular value 
 Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
 """
-function store_result_hdf5(filename::String, singular_values::Array{Float64, 1}, max_bond::Int, O::Float64,
+function store_result_hdf5(filename::String, singular_values::Union{Array{Float64, 1}, Array{Float64, 2}}, max_bond::Int, O::Float64,
                           p_ctrl::Float64, p_proj::Float64, 
                           args::Dict, seed::Int, _eps::Float64)
     
@@ -18,8 +18,9 @@ function store_result_hdf5(filename::String, singular_values::Array{Float64, 1},
 
     # create filename
     h5open(filename, "cw") do file
+        chunk_size = isa(singular_values, Array{Float64, 1}) ? (min(1000, size(singular_values, 1)),) : (min(1000, size(singular_values, 1)), min(1000, size(singular_values, 2)))
         sv_dataset = create_dataset(file, "singular_values", datatype(Float64), dataspace(singular_values),
-        chunk=(min(1000, length(singular_values)),), 
+        chunk=chunk_size, 
         shuffle=true, deflate=6)
         write(sv_dataset, singular_values)
         
@@ -48,6 +49,12 @@ function read_hdf5(filename::String)
         # Read the singular values dataset
         sv_dataset = file["singular_values"]
         singular_values = read(sv_dataset)
+
+        if length(size(singular_values)) == 1
+            println("Not time averaged, 1D singular values")
+        else
+            println("Time averaged, 2D singular values")
+        end
         
         # Read all attributes (metadata)
         attrs = attributes(sv_dataset)

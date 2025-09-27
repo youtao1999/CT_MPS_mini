@@ -20,7 +20,7 @@ function sv_check(mps::MPS, eps::Float64, L::Int)
     return array(diag(S))
 end
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0)
+function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0,time_average::Union{Int,Nothing}=nothing)
     println("seed: ", seed)
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim, builtin=true)
     i=1
@@ -35,9 +35,21 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
         if sv
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
-            # println(length(sv_arr), "lower bound sv: ", sv_arr[end])
-            return O, sv_arr, max_bond, ct_f._eps
+            if time_average !== nothing && time_average > 1
+                # Multiple time steps - return 2D data (list of arrays)
+                sv_arr_list = []
+                for additional_time_step in 1:time_average
+                    sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
+                    push!(sv_arr_list, sv_arr)
+                    i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+                end
+                # implement time averaging: store the sv_arrs for multiple time steps
+                return O, sv_arr_list, max_bond, ct_f._eps
+            else
+                # Single time step - return 1D data
+                sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
+                return O, sv_arr, max_bond, ct_f._eps
+            end
         else
             EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;n=n)
             # ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
@@ -78,8 +90,12 @@ end
 Store a single result directly to HDF5 file, optimized for large singular value arrays.
 Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
+
+Supports both 1D and 2D singular value arrays:
+- 1D: Single array of singular values (backward compatible)
+- 2D: List of arrays (e.g., from multiple time steps), stored as 2D matrix with metadata
 """
-function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entropy_data, max_bond::Int, 
+function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entropy_data_list, max_bond::Int, 
                           p_ctrl::Float64, p_proj::Float64, realization::Int, 
                           args::Dict, seed::Int)
     
@@ -122,13 +138,37 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
         end
         
         # Store singular values with compression (always present in HDF5 files)
-        sv_data = Float64.(entropy_data)
-        
-        sv_dataset = create_dataset(sv_arrays_group, result_name, 
-        datatype(Float64), dataspace(sv_data),
-        chunk=(min(1000, length(sv_data)),), 
-        shuffle=true, deflate=6)
-        write(sv_dataset, sv_data)        
+        # Handle both 1D arrays and 2D arrays (list of arrays)
+        if isa(entropy_data_list, Vector) && length(entropy_data_list) > 0 && isa(entropy_data_list[1], Vector)
+            # entropy_data_list is a list of arrays (2D case)
+            # Convert to 2D matrix: rows = time steps, columns = singular values
+            max_length = maximum(length.(entropy_data_list))
+            sv_data = zeros(Float64, length(entropy_data_list), max_length)
+            
+            for (i, sv_array) in enumerate(entropy_data_list)
+                sv_data[i, 1:length(sv_array)] = Float64.(sv_array)
+            end
+            
+            # Store as 2D dataset with appropriate chunking
+            sv_dataset = create_dataset(sv_arrays_group, result_name, 
+                datatype(Float64), dataspace(sv_data),
+                chunk=(min(10, size(sv_data, 1)), min(1000, size(sv_data, 2))), 
+                shuffle=true, deflate=6)
+            write(sv_dataset, sv_data)
+            
+            # Store metadata about the 2D structure
+            meta_group["sv_array_shape"] = [size(sv_data)...]
+            meta_group["sv_array_lengths"] = [length(arr) for arr in entropy_data_list]
+        else
+            # entropy_data_list is a single array (1D case) - maintain backward compatibility
+            sv_data = Float64.(entropy_data_list)
+            
+            sv_dataset = create_dataset(sv_arrays_group, result_name, 
+                datatype(Float64), dataspace(sv_data),
+                chunk=(min(1000, length(sv_data)),), 
+                shuffle=true, deflate=6)
+            write(sv_dataset, sv_data)
+        end        
         # No global metadata stored
     end
 end
@@ -138,9 +178,16 @@ end
 """
 Read results from HDF5 file with optimized structure. Returns a vector of dictionaries containing the results.
 Handles both metadata and large singular value arrays efficiently.
+
+Supports both 1D and 2D singular value arrays:
+- 1D format: results[i]["sv_arr"] contains a single array
+- 2D format: results[i]["sv_arr"] contains a list of arrays (original structure)
+             results[i]["sv_arr_2d"] contains the full 2D matrix
+
 Example usage: 
     results = read_results_hdf5("output.h5")
-    singular_values = results[1]["sv_arr"]
+    singular_values = results[1]["sv_arr"]  # List of arrays for 2D, single array for 1D
+    full_matrix = results[1]["sv_arr_2d"]   # 2D matrix (only available for 2D format)
     metadata_only = read_results_hdf5("output.h5", load_sv_arrays=false)  # Skip large arrays
 """
 function read_results_hdf5(filename::String; load_sv_arrays::Bool=true)
@@ -176,7 +223,24 @@ function read_results_hdf5(filename::String; load_sv_arrays::Bool=true)
                 
                 # Load singular value arrays if requested (always present in HDF5 files)
                 if load_sv_arrays && haskey(sv_arrays_group, group_name)
-                    result_dict["sv_arr"] = read(sv_arrays_group[group_name])
+                    sv_data = read(sv_arrays_group[group_name])
+                    
+                    # Check if this is 2D data with metadata
+                    if haskey(result_dict, "sv_array_shape") && haskey(result_dict, "sv_array_lengths")
+                        # Reconstruct the original list of arrays from 2D matrix
+                        sv_array_lengths = result_dict["sv_array_lengths"]
+                        sv_arr_list = []
+                        
+                        for (i, length_val) in enumerate(sv_array_lengths)
+                            push!(sv_arr_list, sv_data[i, 1:length_val])
+                        end
+                        
+                        result_dict["sv_arr"] = sv_arr_list
+                        result_dict["sv_arr_2d"] = sv_data  # Also store the full 2D matrix
+                    else
+                        # Legacy 1D format
+                        result_dict["sv_arr"] = sv_data
+                    end
                 end
                 
                 push!(results, result_dict)
@@ -196,7 +260,30 @@ function read_results_hdf5(filename::String; load_sv_arrays::Bool=true)
                         if !load_sv_arrays && key == "sv_arr"
                             continue
                         end
-                        result_dict[key] = read(group[key])
+                        
+                        # Handle singular value arrays specially
+                        if key == "sv_arr" && load_sv_arrays
+                            sv_data = read(group[key])
+                            
+                            # Check if this is 2D data with metadata
+                            if haskey(result_dict, "sv_array_shape") && haskey(result_dict, "sv_array_lengths")
+                                # Reconstruct the original list of arrays from 2D matrix
+                                sv_array_lengths = result_dict["sv_array_lengths"]
+                                sv_arr_list = []
+                                
+                                for (i, length_val) in enumerate(sv_array_lengths)
+                                    push!(sv_arr_list, sv_data[i, 1:length_val])
+                                end
+                                
+                                result_dict["sv_arr"] = sv_arr_list
+                                result_dict["sv_arr_2d"] = sv_data  # Also store the full 2D matrix
+                            else
+                                # Legacy 1D format
+                                result_dict[key] = sv_data
+                            end
+                        else
+                            result_dict[key] = read(group[key])
+                        end
                     elseif group[key] isa HDF5.Group
                         # Handle nested groups (like args)
                         subdict = Dict{String,Any}()
@@ -248,6 +335,16 @@ function inspect_hdf5_file(filename::String)
                             sv_size_bytes = sizeof(sv_arrays_group[group_name])
                             println("    sv_array_size: $(round(sv_size_bytes/1024, digits=2)) KB")
                         end
+                    elseif key == "sv_array_shape"
+                        sv_shape = read(meta_group[key])
+                        println("    $key: $sv_shape")
+                        if haskey(sv_arrays_group, group_name)
+                            sv_size_bytes = sizeof(sv_arrays_group[group_name])
+                            println("    sv_array_size: $(round(sv_size_bytes/1024, digits=2)) KB")
+                        end
+                    elseif key == "sv_array_lengths"
+                        sv_lengths = read(meta_group[key])
+                        println("    $key: lengths for $(length(sv_lengths)) time steps")
                     else
                         value = read(meta_group[key])
                         if isa(value, AbstractArray) && length(value) > 5
