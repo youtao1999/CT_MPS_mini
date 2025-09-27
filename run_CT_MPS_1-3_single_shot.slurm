@@ -45,3 +45,5 @@ echo "=== END DEBUG ==="
 
 # Run the command
 julia --heap-size-hint=100G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L $L --p_vary $P_VARY --p_fixed_name "$P_FIXED_NAME" --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --threshold $THRESHOLD --seed $SEED --output_dir "$OUTPUT_DIR"
+
+# srun --nodes=1 --ntasks-per-node=1 --mem=100G --partition=mem --time=01:00:00 julia --heap-size-hint=80G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L 24 --p_vary 0.5 --p_fixed_name "p_ctrl" --p_fixed_value 0.4 --ancilla 0 --maxdim 512 --threshold 1e-15 --seed 0 --output_dir "/scratch/ty296/test_output"
