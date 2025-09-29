@@ -51,9 +51,9 @@ function read_hdf5(filename::String)
         singular_values = read(sv_dataset)
 
         if length(size(singular_values)) == 1
-            println("Not time averaged, 1D singular values")
+            println("Not time averaged. 1D singular values")
         else
-            println("Time averaged, 2D singular values")
+            println("Time averaged. 2D singular values")
         end
         
         # Read all attributes (metadata)
@@ -126,11 +126,10 @@ function main()
     p_fixed_name = args["p_fixed_name"]
     p_vary_name = p_fixed_name == "p_ctrl" ? "p_proj" : "p_ctrl"
     p_fixed_value = args["p_fixed_value"]
-    println(p_vary_name, p_vary, p_fixed_name, p_fixed_value)
+    println(p_vary_name, " ", p_vary, " ", p_fixed_name, " ", p_fixed_value)
     println("L: ", args["L"])
     println("ancilla: ", args["ancilla"])
     println("maxdim: ", args["maxdim"])
-    println("threshold: ", args["threshold"])
     println("seed: ", args["seed"])
     
     
@@ -142,7 +141,7 @@ function main()
     p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p_vary
     p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p_vary
     # Get results as tuple with singular values
-    @time O, sv_array, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["seed"];sv=true)
+    @time O, sv_array, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["seed"];sv=true, time_average=nothing)
     
     
     # Store result directly to HDF5
