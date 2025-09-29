@@ -33,34 +33,20 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)
     if ancilla ==0 
-        if sv
-            if time_average !== nothing && time_average > 1
-                # Multiple time steps - return 2D data (list of arrays)
-                sv_arr_list = []
-                for additional_time_step in 1:time_average
-                    sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
-                    push!(sv_arr_list, sv_arr)
-                    i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-                end
-                # implement time averaging: store the sv_arrs for multiple time steps
-                return O, sv_arr_list, max_bond, ct_f._eps
-            else
-                # Single time step - return 1D data
+        if time_average !== nothing && time_average > 1
+            # Multiple time steps - return 2D data (list of arrays)
+            sv_arr_list = []
+            for additional_time_step in 1:time_average
                 sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
-                return O, sv_arr, max_bond, ct_f._eps
+                push!(sv_arr_list, sv_arr)
+                i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             end
+            # implement time averaging: store the sv_arrs for multiple time steps
+            return O, sv_arr_list, max_bond, ct_f._eps
         else
-            EE=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;n=n)
-            # ct_f.mps=initial_state # resetting the mps for memory benchmarking purposes
-            return Dict("O" => O, "EE" => EE, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n, "eps" => ct_f._eps)
-        end
-    else
-        if sv
-            SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;sv=sv)
-            return O, SA, max_bond, ct_f._eps
-        else
-            SA=CT.von_Neumann_entropy(ct_f.mps,1,threshold;n=n)
-            return Dict("O" => O, "SA" => SA, "max_bond" => max_bond, "p_ctrl" => p_ctrl, "p_proj" => p_proj, "n" => n, "eps" => ct_f._eps)
+            # Single time step - return 1D data
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
+            return O, sv_arr, max_bond, ct_f._eps
         end
     end
 end
