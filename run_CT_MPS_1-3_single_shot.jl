@@ -7,9 +7,9 @@ Store a single result directly to HDF5 file, optimized for large singular value 
 Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
 """
-function store_result_hdf5(filename::String, singular_values::Union{Array{Float64, 1}, Array{Float64, 2}}, max_bond::Int, O::Float64,
+function store_result_hdf5_single_shot(filename::String, singular_values::Union{Array{Float64, 1}, Array{Float64, 2}}, max_bond::Int, O::Float64,
                           p_ctrl::Float64, p_proj::Float64, 
-                          args::Dict, seed::Int, _eps::Float64)
+                          args::Dict, seed::Int, eps::Float64)
     
     # # Delete file if it exists to ensure clean overwrite
     if isfile(filename)
@@ -33,14 +33,15 @@ function store_result_hdf5(filename::String, singular_values::Union{Array{Float6
         attributes(sv_dataset)["seed"] = seed
         attributes(sv_dataset)["p_ctrl"] = p_ctrl
         attributes(sv_dataset)["p_proj"] = p_proj
+        attributes(sv_dataset)["eps"] = eps
     end
 end
 
 """
-Read back exactly what was stored by store_result_hdf5.
+Read back exactly what was stored by store_result_hdf5_single_shot.
 Returns a tuple: (singular_values, metadata_dict)
 """
-function read_hdf5(filename::String)
+function read_hdf5_single_shot(filename::String)
     if !isfile(filename)
         error("File $filename does not exist")
     end
@@ -69,7 +70,7 @@ function read_hdf5(filename::String)
         metadata["seed"] = read(attrs["seed"])
         metadata["p_ctrl"] = read(attrs["p_ctrl"])
         metadata["p_proj"] = read(attrs["p_proj"])
-        
+        metadata["eps"] = read(attrs["eps"])
         return singular_values, metadata
     end
 end
@@ -103,6 +104,9 @@ function parse_my_args()
         "--threshold", "-t"
         arg_type = Float64
         help = "set the cutoff"
+        "--eps", "-e"
+        arg_type = Float64
+        help = "set the eps"
         "--output_dir", "-o"
         arg_type = String
         default = "/scratch/ty296/test_output"
@@ -131,22 +135,20 @@ function main()
     println("ancilla: ", args["ancilla"])
     println("maxdim: ", args["maxdim"])
     println("seed: ", args["seed"])
-    
+    println("eps: ", args["eps"])
     
     # Choose storage format based on command line argument
     # Use HDF5 format for large singular value arrays
-    filename = "$(args["output_dir"])/$(args["seed"])_a$(args["ancilla"])_L$(args["L"])_$(p_vary_name)$(p_vary).h5"
+    filename = "$(args["output_dir"])/$(args["seed"])_a$(args["ancilla"])_L$(args["L"])_$(p_vary_name)$(p_vary)_eps$(args["eps"]).h5"
     
     # Initialize parameters for this iteration
     p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p_vary
     p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p_vary
     # Get results as tuple with singular values
-    @time O, sv_array, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["seed"];sv=true, time_average=nothing)
-    
-    
+    @time O, sv_array, max_bond, eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["eps"],args["seed"];)
     # Store result directly to HDF5
-    store_result_hdf5(filename, sv_array, max_bond, O,
-                    p_ctrl, p_proj, args, args["seed"], _eps)
+    store_result_hdf5_single_shot(filename, sv_array, max_bond, O,
+                    p_ctrl, p_proj, args, args["seed"], eps)
     
     println("Stored result to HDF5")    
 end

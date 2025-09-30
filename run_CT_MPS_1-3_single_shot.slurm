@@ -6,7 +6,7 @@
 #SBATCH --time=20:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
-#SBATCH --partition=mem
+#SBATCH --partition=main
 
 
 # Variables provided via --export (defaults are handled in Julia script if not provided)
@@ -25,25 +25,10 @@ export MKL_NUM_THREADS=4
 export OMP_NUM_THREADS=2
 # export OPENBLAS_NUM_THREADS=2
 
-# Debug: Print all variables
-echo "=== DEBUG: Variable values ==="
-echo "L=$L"
-echo "P_VARY=$P_VARY"
-echo "P_FIXED_NAME=$P_FIXED_NAME"
-echo "P_FIXED_VALUE=$P_FIXED_VALUE"
-echo "ANCILLA=$ANCILLA"
-echo "MAXDIM=$MAXDIM"
-echo "THRESHOLD=$THRESHOLD"
-echo "OUTPUT_DIR=$OUTPUT_DIR"
-echo "SLURM_JOB_ID=$SLURM_JOB_ID"
-echo "JOB_NAME=$JOB_NAME"
-echo "SLURM_JOB_NAME=$SLURM_JOB_NAME"
-echo "SEED=$SEED"
-echo "MEMORY=N/A (set via --mem)"
-echo "SLURM_SCRIPT=N/A (this script)"
-echo "=== END DEBUG ==="
-
 # Run the command
-julia --heap-size-hint=100G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L $L --p_vary $P_VARY --p_fixed_name "$P_FIXED_NAME" --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --threshold $THRESHOLD --seed $SEED --output_dir "$OUTPUT_DIR"
+julia --heap-size-hint=30G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L $L --p_vary $P_VARY --p_fixed_name "$P_FIXED_NAME" --p_fixed_value $P_FIXED_VALUE --ancilla $ANCILLA --maxdim $MAXDIM --threshold $THRESHOLD --seed $SEED --output_dir "$OUTPUT_DIR" --eps $EPS
 
-# srun --nodes=1 --ntasks-per-node=1 --mem=100G --partition=mem --time=01:00:00 julia --heap-size-hint=80G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L 20 --p_vary 1.0 --p_fixed_name "p_ctrl" --p_fixed_value 0.0 --ancilla 0 --maxdim 512 --threshold 1e-15 --seed 146 --output_dir "/scratch/ty296/test_output"
+# srun --nodes=1 --ntasks-per-node=1 --mem=40G --partition=main --time=01:00:00 julia --heap-size-hint=20G --sysimage=/scratch/ty296/CT_MPS_mini/ct_with_wrapper.so --project=/scratch/ty296/CT_MPS_mini/CT /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_single_shot.jl --L 30 --p_vary 0.7 --p_fixed_name "p_ctrl" --p_fixed_value 0.4 --ancilla 0 --maxdim 64 --threshold 1e-15 --seed 146 --output_dir "/scratch/ty296/test_output" --eps 1e-5
+
+# L24 20G eps 1e-10
+# L30 40G eps 1e-10, 1e-5

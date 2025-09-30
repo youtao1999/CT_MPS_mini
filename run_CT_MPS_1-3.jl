@@ -20,13 +20,15 @@ function sv_check(mps::MPS, eps::Float64, L::Int)
     return array(diag(S))
 end
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64,seed::Int;sv::Bool=false,n::Int=0,time_average::Union{Int,Nothing}=nothing)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim, _maxdim0=maxdim, builtin=false)
+function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64, eps::Float64,seed::Int;n::Int=0,time_average::Union{Int,Nothing}=nothing)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1 // 3, 2 // 3]),_maxdim=maxdim, builtin=false, _eps=eps)
     i=1
+    println(ct_f.xj)
     # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     for idx in 1:T_max
-        i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        @time i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        # println(ct_f.mps)
         # println(sv_check_dict)
         println(idx, " heap memory usage: ", Base.gc_live_bytes()/ 1024^2, " MB")
     end
@@ -37,7 +39,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             # Multiple time steps - return 2D data (list of arrays)
             sv_arr_list = []
             for additional_time_step in 1:time_average
-                sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
+                sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
                 push!(sv_arr_list, sv_arr)
                 i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             end
@@ -45,7 +47,11 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             return O, sv_arr_list, max_bond, ct_f._eps
         else
             # Single time step - return 1D data
-            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold;sv=sv,positivedefinite=false,n=n)
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
+            # vector_sv_arr = vec(array(contract(ct_f.mps)))
+            # println(typeof(vector_sv_arr), " ", size(vector_sv_arr), vector_sv_arr[1:10])
+            # println("Norm of MPS: ", norm(ct_f.mps))
+            # println(typeof(sv_arr), " ", size(sv_arr))
             return O, sv_arr, max_bond, ct_f._eps
         end
     end
@@ -403,6 +409,9 @@ function parse_my_args()
         "--threshold", "-t"
         arg_type = Float64
         help = "set the cutoff"
+        "--eps", "-e"
+        arg_type = Float64
+        help = "set the eps"
         "--n_chunk_realizations", "-n"
         arg_type = Int
         help = "number of realizations handled per cpu worker"
@@ -413,9 +422,6 @@ function parse_my_args()
         arg_type = String
         default = "/scratch/ty296/test_output"
         help = "output directory"
-        "--store_sv"
-        action = :store_true
-        help = "store singular values (uses HDF5 format), otherwise store scalar entropy only (JSON format)"
     end
     return parse_args(s)
 end
@@ -441,76 +447,39 @@ function main()
     println("maxdim: ", args["maxdim"])
     println("threshold: ", args["threshold"])
     println("n_chunk_realizations: ", args["n_chunk_realizations"])
+    println("eps: ", args["eps"])
     
-    
-    # Choose storage format based on command line argument
-    store_singular_values = args["store_sv"]
-    # println("store_singular_values: ", store_singular_values)
-    # println("random: ", args["random"])
-    if store_singular_values
-        # Use HDF5 format for large singular value arrays
-        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).h5"
-        result_count = 0
+    # Use HDF5 format for large singular value arrays
+    filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).h5"
+    result_count = 0
+
+    #scan over p_range
+    for p in p_range
+        # Initialize parameters for this iteration
+        p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
+        p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
         
-        #scan over p_range
-        for p in p_range
-            # Initialize parameters for this iteration
-            p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
-            p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
+        for i in 1:(args["n_chunk_realizations"])
+            if args["random"]
+                seed = rand(1:10000)
+            else
+                seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
+            end
+            # Get results as tuple with singular values
+            @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["eps"],seed;)
             
-            for i in 1:(args["n_chunk_realizations"])
-                if args["random"]
-                    seed = rand(1:10000)
-                else
-                    seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
-                end
-                # Get results as tuple with singular values
-                @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
-                
-                result_count += 1
-                
-                # Store result directly to HDF5
-                store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
-                                p_ctrl, p_proj, i, args, seed)
-                
-                println("Stored result $result_count to HDF5")
-            end
+            result_count += 1
+            
+            # Store result directly to HDF5
+            store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
+                            p_ctrl, p_proj, i, args, seed)
+            
+            println("Stored result $result_count to HDF5")
         end
-        
-        println("Saved $result_count results to $filename (HDF5 format)")
-        
-    else
-        # Use JSON format for scalar entropy values only
-        filename = "$(args["output_dir"])/$(args["job_counter"])_a$(args["ancilla"])_L$(args["L"]).json"
-        result_count = 0
-        
-        open(filename, "w") do f
-            #scan over p_range
-            for p in p_range
-                # Initialize parameters for this iteration
-                p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
-                p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
-                
-                for i in 1:(args["n_chunk_realizations"])
-                    if args["random"]
-                        seed = rand(1:10000)
-                    else
-                        seed = i - 1 + args["job_counter"]  * args["n_chunk_realizations"]
-                    end 
-                    
-                    # Get results as dictionary (scalar entropy only)
-                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
-                    data_to_serialize = merge(results, Dict("args" => args, "realization number" => i))
-                    
-                    # Write each result as a separate line (JSON Lines format)
-                    println(f, JSON.json(data_to_serialize))
-                    result_count += 1
-                end
-            end
-        end
-        
-        println("Saved $result_count results to $filename (JSON format)")
     end
+    
+    println("Saved $result_count results to $filename (HDF5 format)")
+    
 end
 
 if isdefined(Main, :PROGRAM_FILE) && abspath(PROGRAM_FILE) == @__FILE__

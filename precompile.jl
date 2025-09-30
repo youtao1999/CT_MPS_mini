@@ -2,9 +2,7 @@
 using CT, ArgParse
 include("run_CT_MPS_1-3.jl")
 # do one dummy call so all methods get JIT’ed
-main_interactive(20, 0.0, 0.0, 0, Int(2^(9)), 1e-15, 43; sv=true, n=0)
-main_interactive(20, 1.0, 0.0, 0, Int(2^(9)), 1e-15, 43; sv=true, n=0)
-main_interactive(20, 0.0, 1.0, 0, Int(2^(9)), 1e-15, 43; sv=true, n=0)
+main_interactive(20, 0.4, 0.7, 0, Int(2^(10)), 1e-15, 1e-10, 43; n=0)
 
 # To run the precompilation, use the following command:
 # export JULIA_DEPOT_PATH=~/julia_depot
@@ -17,6 +15,12 @@ main_interactive(20, 0.0, 1.0, 0, Int(2^(9)), 1e-15, 43; sv=true, n=0)
 #     project="CT", cpu_target="generic"
 #   )
 
+# srun --nodes=1 --ntasks-per-node=1 --mem=10G --time=1:00:00 julia -e "using PackageCompiler; using Pkg; Pkg.activate("CT"); create_sysimage(
+#     [:CT, :ITensors, :ArgParse, :JSON, :MKL, :HDF5],
+#     sysimage_path="ct_with_wrapper.so",
+#     precompile_execution_file="precompile.jl",
+#     project="CT", cpu_target="generic"
+#   )"
 
 # Then to start from the sysimage, use: 
 # julia --sysimage ct_with_wrapper.so --project=.

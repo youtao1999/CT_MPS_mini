@@ -61,9 +61,9 @@ function CT_MPS(
     xj::Set=Set([1 // 3, 2 // 3]),
     ancilla::Int=0,
     folded::Bool=false,
-    _maxdim0::Int=2^9,
-    _eps::Float64=1e-30,
-    _maxdim::Int=typemax(Int),
+    _maxdim0::Int=50,
+    _eps::Float64=1e-10,
+    _maxdim::Int=2^10,
     debug::Bool=false,
     simplified_U::Bool=false,
     builtin::Bool=false,
@@ -73,9 +73,14 @@ function CT_MPS(
     rng_C = seed_C === nothing ? rng : MersenneTwister(seed_C)
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
-    mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
+    println("initialize basis done")
+    @time mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
+    println("initialize vector done")
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
-    dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
+    println("initialize adder done")
+    # dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
+    dw=[]
+    # println('initialize dw done')
     ct = CT_MPS(L, store_vec, store_op, store_prob, seed, seed_vec, seed_C, seed_m, x0, xj, ancilla, folded, rng, rng_vec, rng_C, rng_m, qubit_site, phy_ram, ram_phy, phy_list, _maxdim0, _eps, _maxdim, mps, [],[],adder,dw,debug,simplified_U,builtin)
     return ct
 end
@@ -111,6 +116,7 @@ function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational
             vec_int_pos = [string(s) for s in lpad(string(vec_int, base=2), L, "0")] # physical index
             return MPS(ComplexF64, qubit_site, [vec_int_pos[ram_phy[i]] for i in 1:L])
         else
+            println("initializing random MPS with linkdims $_maxdim0")
             return randomMPS(rng_vec, qubit_site, linkdims=_maxdim0)
         end
     elseif ancilla ==1
@@ -866,7 +872,7 @@ function dw_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_ram:
     end
 end
 
-function von_Neumann_entropy(mps::MPS, i::Int, threshold::Float64; n::Int=1,positivedefinite=false,eps::Float64=1e-30,sv=false)
+function von_Neumann_entropy(mps::MPS, i::Int, threshold::Float64, eps::Float64; n::Int=1,positivedefinite=false,sv=false)
     println("from SvN, n=$n, threshold=$threshold")
     mps_ = orthogonalize(mps, i)
     _, S = svd(mps_[i], (linkind(mps_, i),); cutoff=eps)
