@@ -7,7 +7,7 @@ Store a single result directly to HDF5 file, optimized for large singular value 
 Uses compression and efficient chunking for large arrays.
 Appends results to existing file or creates new file.
 """
-function store_result_hdf5_single_shot(filename::String, singular_values::Union{Array{Float64, 1}, Array{Float64, 2}}, max_bond::Int, O::Float64,
+function store_result_hdf5_single_shot(filename::String, singular_values::Union{Vector{Float64},Vector{Vector{Float64}}}, max_bond::Int, O::Float64,
                           p_ctrl::Float64, p_proj::Float64, 
                           args::Dict, seed::Int, eps::Float64)
     
@@ -18,11 +18,26 @@ function store_result_hdf5_single_shot(filename::String, singular_values::Union{
 
     # create filename
     h5open(filename, "cw") do file
-        chunk_size = isa(singular_values, Array{Float64, 1}) ? (min(1000, size(singular_values, 1)),) : (min(1000, size(singular_values, 1)), min(1000, size(singular_values, 2)))
-        sv_dataset = create_dataset(file, "singular_values", datatype(Float64), dataspace(singular_values),
+        # Handle different data types for chunking
+        if isa(singular_values, Vector{Float64})
+            # 1D case
+            chunk_size = (min(1000, length(singular_values)),)
+            sv_data = singular_values
+        else
+            # Vector{Vector{Float64}} case - convert to 2D matrix
+            max_len = maximum(length.(singular_values))
+            sv_matrix = zeros(Float64, length(singular_values), max_len)
+            for (i, sv_vec) in enumerate(singular_values)
+                sv_matrix[i, 1:length(sv_vec)] = sv_vec
+            end
+            chunk_size = (min(1000, size(sv_matrix, 1)), min(1000, size(sv_matrix, 2)))
+            sv_data = sv_matrix
+        end
+        
+        sv_dataset = create_dataset(file, "singular_values", datatype(Float64), dataspace(sv_data),
         chunk=chunk_size, 
         shuffle=true, deflate=6)
-        write(sv_dataset, singular_values)
+        write(sv_dataset, sv_data)
         
         # Add metadata as attributes to the compressed dataset
         attributes(sv_dataset)["L"] = args["L"]
@@ -49,12 +64,29 @@ function read_hdf5_single_shot(filename::String)
     h5open(filename, "r") do file
         # Read the singular values dataset
         sv_dataset = file["singular_values"]
-        singular_values = read(sv_dataset)
+        raw_data = read(sv_dataset)
 
-        if length(size(singular_values)) == 1
+        # Convert back to appropriate format
+        if length(size(raw_data)) == 1
+            # Single time step case
+            singular_values = raw_data
             println("Not time averaged. 1D singular values")
         else
-            println("Time averaged. 2D singular values")
+            # Multiple time steps case - convert back to Vector{Vector{Float64}}
+            # Remove zero-padding by finding the last non-zero element in each row
+            singular_values = Vector{Vector{Float64}}()
+            for i in 1:size(raw_data, 1)
+                row = raw_data[i, :]
+                # Find last non-zero element (or use all if no zeros)
+                last_nonzero = findlast(x -> x != 0.0, row)
+                if last_nonzero === nothing
+                    # All zeros - this shouldn't happen but handle gracefully
+                    push!(singular_values, Float64[])
+                else
+                    push!(singular_values, row[1:last_nonzero])
+                end
+            end
+            println("Time averaged. Converted back to Vector{Vector{Float64}} format")
         end
         
         # Read all attributes (metadata)
@@ -145,7 +177,7 @@ function main()
     p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p_vary
     p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p_vary
     # Get results as tuple with singular values
-    @time O, sv_array, max_bond, eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["eps"],args["seed"];)
+    @time O, sv_array, max_bond, eps = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],args["eps"],args["seed"];time_average=10)
     # Store result directly to HDF5
     store_result_hdf5_single_shot(filename, sv_array, max_bond, O,
                     p_ctrl, p_proj, args, args["seed"], eps)
@@ -153,4 +185,6 @@ function main()
     println("Stored result to HDF5")    
 end
 
-main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

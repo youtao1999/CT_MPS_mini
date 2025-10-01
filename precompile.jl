@@ -2,7 +2,7 @@
 using CT, ArgParse
 include("run_CT_MPS_1-3.jl")
 # do one dummy call so all methods get JIT’ed
-main_interactive(20, 0.4, 0.7, 0, Int(2^(10)), 1e-15, 1e-10, 43; n=0)
+main_interactive(20, 0.4, 0.7, 0, Int(2^(10)), 1e-15, 1e-10, 43; time_average=10)
 
 # To run the precompilation, use the following command:
 # export JULIA_DEPOT_PATH=~/julia_depot

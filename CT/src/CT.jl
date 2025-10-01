@@ -77,7 +77,7 @@ function CT_MPS(
     @time mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
     println("initialize vector done")
     adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L]
-    println("initialize adder done")
+    println("initialize adder done ", Base.summarysize(adder) / 2^20, " MB")
     # dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
     dw=[]
     # println('initialize dw done')

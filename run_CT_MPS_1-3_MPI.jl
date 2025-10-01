@@ -16,6 +16,22 @@ using ArgParse
 using Serialization
 
 include("run_CT_MPS_1-3.jl")
+include("run_CT_MPS_1-3_single_shot.jl")
+
+function parse_my_args_MPI()
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "--job_list"
+        "--p_fixed_name"
+        "--p_fixed_value"
+        "--ancilla"
+        "--maxdim"
+        "--threshold"
+        "--eps"
+        "--L"
+    end
+    return parse_args(s)
+end
 
 function main()
     MPI.Init()
@@ -26,132 +42,65 @@ function main()
     println("Uses threads: ",BLAS.get_num_threads())
     println("Uses backends: ",BLAS.get_config())
     
-    args = parse_my_args()
-    p_range = parse_p_range(args["p_range"])
+    args = parse_my_args_MPI()
+    
+    # Parse job_list string as Julia literal
+    job_list_str = args["job_list"]
+    job_list_str_fixed = replace(job_list_str, "'" => "\"")
+    job_list = eval(Meta.parse(job_list_str_fixed))
+    
+    # Convert other arguments to proper types
     p_fixed_name = args["p_fixed_name"]
-    p_fixed_value = args["p_fixed_value"]
-    job_counter = args["job_counter"]
+    p_fixed_value = parse(Float64, args["p_fixed_value"])
+    ancilla = parse(Int, args["ancilla"])
+    maxdim = parse(Int, args["maxdim"])
+    threshold = parse(Float64, args["threshold"])
+    eps = parse(Float64, args["eps"])
+    L = parse(Int, args["L"])
     
     # Only master process prints the full configuration
     if rank == 0
-        println("p_range: ", p_range)
+        println("job_list: ", job_list)
         println("p_fixed_name: ", p_fixed_name)
         println("p_fixed_value: ", p_fixed_value)
-        println("L: ", args["L"])
-        println("ancilla: ", args["ancilla"])
-        println("maxdim: ", args["maxdim"])
-        println("threshold: ", args["threshold"])
-        println("n_chunk_realizations: ", args["n_chunk_realizations"])
-        println("Number of p values: ", length(p_range))
-        println("Expected workers: ", min(size, length(p_range)))
+        println("L: ", L)
+        println("ancilla: ", ancilla)
+        println("maxdim: ", maxdim)
+        println("threshold: ", threshold)
+        println("eps: ", eps)
+        println("Expected workers: ", min(size, length(job_list)))        
     end
 
-    # Distribute realizations across workers instead of p values
-    # Each worker computes all p values but for different realizations
-    total_realizations = args["n_chunk_realizations"]
+    # Extract job for this worker
+    seed, p, eps, output_dir = job_list[rank+1]  # Julia is 1-indexed
     
-    # Assert that number of realizations is divisible by number of workers
-    if total_realizations % size != 0
-        error("Number of realizations ($total_realizations) must be divisible by number of workers ($size)")
-    end
-    
-    realizations_per_worker = div(total_realizations, size)
-    start_realization = rank * realizations_per_worker + 1
-    end_realization = (rank + 1) * realizations_per_worker
-    
-    println("Worker $rank assigned realizations: $start_realization to $end_realization ($realizations_per_worker total)")
-    println("Worker $rank will compute all p values: ", p_range)
-    println("Worker $rank job_id: $(args["job_counter"])")
-    println("Worker $rank output_dir: $(args["output_dir"])")
-    
-    # Choose storage format based on command line argument
-    store_singular_values = args["store_sv"]
+    # Convert job parameters to proper types
+    seed = Int(seed)
+    p = Float64(p)
+    eps = Float64(eps)
+    output_dir = String(output_dir)
 
-    if store_singular_values
-        # Use HDF5 format for large singular value arrays
-        # Each worker writes to its own file to avoid conflicts
-        # Add hostname and process ID for extra uniqueness
-        hostname = gethostname()
-        pid = getpid()
-        filename = "$(args["output_dir"])/$(args["p_fixed_name"])$(args["p_fixed_value"])_$(args["job_counter"])_worker$(rank)_$(hostname)_$(pid)_L$(args["L"]).h5"
-        println("Worker $rank will write to file: $filename")
-        result_count = 0
-        
-        # Process assigned realizations, then sweep through all p values for each realization
-        for i in start_realization:end_realization
-            # Set seed once per realization to ensure consistency across all p values
-            if args["random"]
-                # Use realization number for seed to ensure reproducibility
-                # All workers use the same seed for the same realization number
-                seed = rand(1:10000)
-            else
-                seed = i + job_counter # Use realization number as seed
-            end
-            
-            println("Worker $rank processing realization $i with seed $seed")
-            
-            # Now sweep through all p values with the same seed
-            for p in p_range
-                # Initialize parameters for this iteration
-                p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
-                p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
-                
-                # Get results as tuple with singular values
-                @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
-                
-                result_count += 1
-                
-                # Store result directly to HDF5
-                store_result_hdf5(filename, result_count, O, entropy_data, max_bond, 
-                                p_ctrl, p_proj, i, args, seed)
-                
-                println("Worker $rank stored result $result_count (realization=$i, p=$p) to HDF5")
-            end
-        end
-        
-        println("Worker $rank saved $result_count results to $filename (HDF5 format)")
-        
-    else
-        # Use JSON format for scalar entropy values only
-        # Each worker writes to its own file to avoid conflicts
-        filename = "$(args["output_dir"])/$(args["job_counter"])_worker$(rank)_a$(args["ancilla"])_L$(args["L"]).json"
-        result_count = 0
-        
-        open(filename, "w") do f
-            # Process assigned realizations, then sweep through all p values for each realization
-            for i in start_realization:end_realization
-                # Set seed once per realization to ensure consistency across all p values
-                if args["random"]
-                    # Use realization number for seed to ensure reproducibility
-                    # All workers use the same seed for the same realization number
-                    seed = rand(1:10000)
-                else
-                    seed = i + job_counter # Use realization number as seed
-                end
-                
-                println("Worker $rank processing realization $i with seed $seed")
-                
-                # Now sweep through all p values with the same seed
-                for p in p_range
-                    # Initialize parameters for this iteration
-                    p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
-                    p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
-                    
-                    # Get results as dictionary (scalar entropy only)
-                    results = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed;sv=store_singular_values)
-                    data_to_serialize = merge(results, Dict("args" => args, "p_value" => p, "realization number" => i, "worker_rank" => rank))
-                    
-                    # Write each result as a separate line (JSON Lines format)
-                    println(f, JSON.json(data_to_serialize))
-                    result_count += 1
-                    
-                    println("Worker $rank stored result for realization=$i, p=$p")
-                end
-            end
-        end
-        
-        println("Worker $rank saved $result_count results to $filename (JSON format)")
-    end
+    println("Worker $rank assigned job: seed=$seed, p=$p, eps=$eps")
+    println("Worker $rank output_dir: $(output_dir)")
+
+    # Setup parameters for computation
+    p_vary_name = p_fixed_name == "p_ctrl" ? "p_proj" : "p_ctrl"
+    p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p
+    p_proj = p_fixed_name == "p_proj" ? p_fixed_value : p
+    
+    filename = "$(output_dir)/$(seed)_a$(ancilla)_L$(L)_$(p_vary_name)$(p)_eps$(eps).h5"
+    println("Worker $rank will write to file: $filename")
+    
+    # # Get results as tuple with singular values
+    # @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed)
+    # # Store result directly to HDF5
+    # store_result_hdf5(filename, O, entropy_data, max_bond, 
+    #             p_ctrl, p_proj, seed)
+
+    @time O, sv_array, max_bond, eps = main_interactive(L, p_ctrl, p_proj, ancilla, maxdim,threshold,eps,seed;time_average=10)
+    # Store result directly to HDF5
+    store_result_hdf5_single_shot(filename, sv_array, max_bond, O, p_ctrl, p_proj, args, seed, eps)
+    println("Worker $rank stored result (seed=$seed, p=$p, eps=$eps) to HDF5")
     
     # Synchronize all workers before finishing
     MPI.Barrier(comm)
@@ -164,4 +113,6 @@ function main()
     MPI.Finalize()
 end
 
-main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end
