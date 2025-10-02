@@ -31,7 +31,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     open("/scratch/ty296/logs/$(L)_$(p_ctrl)_$(p_proj)_$(ancilla)_$(maxdim)_$(threshold)_$(eps)_$(seed).txt", "w") do file
         # write(file, "Hello, World!\n")
         for idx in 1:T_max
-            @time i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+            i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             # println(ct_f.mps)
             # println(sv_check_dict)
             write(file, "$(idx) heap memory usage: $(Base.gc_live_bytes()/ 1024^2) MB, Max RSS: $(Sys.maxrss() / 1024^2) MB\n")

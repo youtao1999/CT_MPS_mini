@@ -21,13 +21,12 @@ include("run_CT_MPS_1-3_single_shot.jl")
 function parse_my_args_MPI()
     s = ArgParseSettings()
     @add_arg_table! s begin
-        "--job_list"
+        "--job_file"
         "--p_fixed_name"
         "--p_fixed_value"
         "--ancilla"
         "--maxdim"
         "--threshold"
-        "--eps"
         "--L"
     end
     return parse_args(s)
@@ -44,10 +43,16 @@ function main()
     
     args = parse_my_args_MPI()
     
-    # Parse job_list string as Julia literal
-    job_list_str = args["job_list"]
-    job_list_str_fixed = replace(job_list_str, "'" => "\"")
-    job_list = eval(Meta.parse(job_list_str_fixed))
+    # Read job_list from file to avoid command line length limits
+    job_file = args["job_file"]
+    println("Reading jobs from file: ", job_file)
+    job_list = JSON.parsefile(job_file)
+    println("Loaded ", length(job_list), " jobs")
+    
+    # Clean up the temporary file (only on rank 0 to avoid race conditions)
+    if rank == 0
+        rm(job_file)
+    end
     
     # Convert other arguments to proper types
     p_fixed_name = args["p_fixed_name"]
@@ -55,7 +60,6 @@ function main()
     ancilla = parse(Int, args["ancilla"])
     maxdim = parse(Int, args["maxdim"])
     threshold = parse(Float64, args["threshold"])
-    eps = parse(Float64, args["eps"])
     L = parse(Int, args["L"])
     
     # Only master process prints the full configuration
@@ -67,7 +71,6 @@ function main()
         println("ancilla: ", ancilla)
         println("maxdim: ", maxdim)
         println("threshold: ", threshold)
-        println("eps: ", eps)
         println("Expected workers: ", min(size, length(job_list)))        
     end
 

@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --requeue
-#SBATCH --ntasks=4               # Number of MPI tasks
 #SBATCH --cpus-per-task=2        # Number of CPU cores per task
+#SBATCH --mem=128G                # Total memory for all tasks
 #SBATCH --time=10:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
-#SBATCH --partition=mem
+#SBATCH --partition=main
 #SBATCH --nodes=1                  # Force single node
 
 # Script to run CT_MPS simulation with MPI workers on a single node
@@ -30,26 +30,24 @@ export OPENBLAS_NUM_THREADS=2
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
 # Temporarily removing sysimage to test MPI configuration
-# mpirun -n $SLURM_NTASKS julia --heap-size-hint=100G --project=/scratch/ty296/CT_MPS_mini/CT \
-#     /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
-#     --L $L \
-#     --job_list $JOB_LIST \
-#     --p_fixed_name $P_FIXED_NAME \
-#     --p_fixed_value $P_FIXED_VALUE \
-#     --ancilla $ANCILLA \
-#     --maxdim $MAXDIM \
-#     --threshold $THRESHOLD \
-#     --eps $EPS \
-
-
-# example:
-mpirun -n 4 julia --heap-size-hint=10G --project=/scratch/ty296/CT_MPS_mini/CT \
+mpirun -n $SLURM_NTASKS julia --heap-size-hint=10G --project=/scratch/ty296/CT_MPS_mini/CT \
     /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
-    --L 16 \
-    --job_list "[(2, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (3, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (4, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (5, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10')]" \
-    --p_fixed_name p_ctrl \
-    --p_fixed_value 0.4 \
-    --ancilla 0 \
-    --maxdim 100 \
-    --threshold 1e-15 \
-    --eps 1e-10
+    --L $L \
+    --job_file $JOB_FILE \
+    --p_fixed_name $P_FIXED_NAME \
+    --p_fixed_value $P_FIXED_VALUE \
+    --ancilla $ANCILLA \
+    --maxdim $MAXDIM \
+    --threshold $THRESHOLD \
+
+# # example:
+# mpirun -n 4 julia --heap-size-hint=10G --project=/scratch/ty296/CT_MPS_mini/CT \
+#     /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
+#     --L 20 \
+#     --job_list "[(2, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (3, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (4, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10'), (5, 0.5, 1e-10, '/scratch/ty296/hdf5_data/p_ctrl0.4/p_proj0.5_eps1e-10')]" \
+#     --p_fixed_name p_ctrl \
+#     --p_fixed_value 0.4 \
+#     --ancilla 0 \
+#     --maxdim 1024 \
+#     --threshold 1e-15 \
+#     --eps 1e-10
