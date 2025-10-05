@@ -34,7 +34,10 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             # println(ct_f.mps)
             # println(sv_check_dict)
-            write(file, "$(idx) heap memory usage: $(Base.gc_live_bytes()/ 1024^2) MB, Max RSS: $(Sys.maxrss() / 1024^2) MB\n")
+            heap_memory_usage = Base.gc_live_bytes() / 1024^2
+            max_rss = Sys.maxrss() / 1024^2
+            println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
+            write(file, "$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB\n")
         end
         O=CT.order_parameter(ct_f)
         max_bond= CT.max_bond_dim(ct_f.mps)
