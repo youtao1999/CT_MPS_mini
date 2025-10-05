@@ -11,6 +11,297 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+def parse_name(name):
+    L = int(name.split('_')[2].split('L')[1])
+    p_ctrl = float(name.split('_')[3].split('pctrl')[1].split('_')[0])
+    p_proj = float(name.split('_')[4].split('pproj')[1].split('_')[0])
+    seed = int(name.split('_')[5].split('seed')[1])
+    return L, p_ctrl, p_proj, seed
+
+def plot_sv_arr(filename):
+    # the input filename must be full file path to a single trajectory h5 file
+    with h5py.File(filename, 'r') as f:
+        sv_arr = f['singular_values'][:]
+        # print(sv_arr)
+        plt.yscale('log')
+        plt.plot(sv_arr)
+        # plt.show()
+        plt.savefig(f'/scratch/ty296/plots/sv_arr_{filename}.png')
+        # print(sv_arr.shape)
+
+def combine(combined_sv_filename, p_fixed_name, p_fixed_value):
+    all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", "*", "**"))
+    with h5py.File(combined_sv_filename, 'w') as f_target:
+        for filename in all_files:
+            with h5py.File(filename, 'r+') as f_source:
+                dataset = f_source['singular_values']
+                # print(len(dataset[:]))
+                attrs = dataset.attrs
+                # print(attrs.keys())
+                dataset_target = f_target.create_dataset(f'sv_arr_L{int(attrs["L"])}_pctrl{float(attrs["p_ctrl"])}_pproj{float(attrs["p_proj"])}_seed{int(attrs["seed"])}', data=np.transpose(dataset[:]))
+                dataset_target.attrs.update(attrs)
+
+def total_s0_dict(combined_sv_filename, threshold_val):
+
+    # with h5py.File(sv_combined, 'r') as f:
+    # from collections import defaultdict
+    # groups = defaultdict(list)
+    # for real_key in tqdm.tqdm(f.keys()):
+    #     s0 = von_neumann_entropy_sv(f[real_key][()], n=n, positivedefinite=False, threshold=threshold)
+    #     # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
+    #     key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
+    #     groups[key_val].append(s0)
+
+    total_dict = {}
+    with h5py.File(combined_sv_filename, 'r') as f:
+        for key in list(f.keys()):
+            L, p_ctrl, p_proj, seed = parse_name(key)
+            if f[key][()].ndim == 1:
+                s = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
+            else:
+                s = []
+                # print("sv_arr_list: ", f[key][()].shape)
+                for sv_arr in f[key][()]:
+                    s.append(von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val))
+                s = np.array(s)
+            
+            if (L, p_ctrl, p_proj) not in total_dict:
+                total_dict[(L, p_ctrl, p_proj)] = [s]
+            else:
+                total_dict[(L, p_ctrl, p_proj)].append(s)
+    
+    for key, item in total_dict.items():
+        total_dict[key] = np.array(item).flatten()
+
+    return total_dict
+
+# read into the combined data file
+def distribution_dict(combined_sv_filename, L_target, threshold_val):
+    min_sv_dict = {}
+    maxbond_dict = {}
+    entropy_dict = {}
+    with h5py.File(combined_sv_filename, 'r') as f:
+        for key in list(f.keys()):
+            L, p_ctrl, p_proj, seed = parse_name(key)
+            if L == L_target:
+                if f[key][()].ndim == 1:
+                    min_sv = np.min(f[key][()])
+                else:
+                    min_sv = []
+                    for sv_arr in f[key][()]:
+                        min_sv.append(np.min(sv_arr))
+                    min_sv = np.array(min_sv)
+                
+                if (L, p_ctrl, p_proj) not in min_sv_dict:
+                    min_sv_dict[(L, p_ctrl, p_proj)] = [min_sv]
+                else:
+                    min_sv_dict[(L, p_ctrl, p_proj)].append(min_sv)
+            
+                if 'max_bond' in f[key].attrs.keys():
+                    maxbond = f[key].attrs['max_bond']
+                    if (L, p_ctrl, p_proj) not in maxbond_dict:
+                        maxbond_dict[(L, p_ctrl, p_proj)] = [maxbond]
+                    else:
+                        maxbond_dict[(L, p_ctrl, p_proj)].append(maxbond)
+
+                entropy = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
+                if (L, p_ctrl, p_proj) not in entropy_dict:
+                    entropy_dict[(L, p_ctrl, p_proj)] = [entropy]
+                else:
+                    entropy_dict[(L, p_ctrl, p_proj)].append(entropy)
+    return min_sv_dict, maxbond_dict, entropy_dict
+
+def plot_distribution(data_dict, n_plots=12, x_label='s0', log_scale=False, n_bins=20):
+    n_plots = 12
+    n_cols = 3
+    n_rows = (n_plots + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 5*n_rows))
+    axes = axes.flatten()
+
+    # Plot histogram for each p_proj value
+
+    # for idx, (p_proj, sv_seed_list) in enumerate(sorted(min_sv_dict.items())[0:n_plots]):
+    for idx, (key, data_array) in enumerate(sorted(data_dict.items())[0:n_plots]):
+        print(key, len(data_array))
+        L, p_ctrl, p_proj = key
+        ax = axes[idx]
+        if log_scale:
+            ax.hist(np.log10(data_array), edgecolor='black', bins=n_bins)
+        else:
+            ax.hist(data_array, edgecolor='black', bins=n_bins)
+        ax.set_title(f'p_proj = {p_proj:.2f}')
+        ax.set_xlabel(x_label) # chosen from min_sv, maxbond or entropy
+        ax.set_ylabel('Count')
+        ax.legend()
+
+    # Remove any empty subplots
+    for idx in range(len(data_dict), len(axes)):
+        fig.delaxes(axes[idx])
+
+    plt.tight_layout()
+    plt.savefig(f'/scratch/ty296/plots/distribution_{x_label}.png')
+    # plt.show()
+
+import matplotlib.pyplot as plt
+
+def plot_from_dict(total_dict, threshold_val, p_fixed_name='p_ctrl', p_fixed_value=0.4, save_folder='/scratch/ty296/plots'):
+    """
+    Plot p_proj vs mean±SEM and p_proj vs variance±SEVAR from dictionary
+    data_dict format: {(L, p_ctrl, p_proj): (mean, sem, var, semvar)}
+    """
+    import os
+    import numpy as np
+    
+    # Create save folder if it doesn't exist
+    os.makedirs(save_folder, exist_ok=True)
+
+    plot_dict = {}
+    for key in total_dict.keys():
+        if len(total_dict[key]) > 1:
+            mean, sem = calculate_mean_and_error(total_dict[key])
+            var, semvar = calculate_variance_and_error(total_dict[key])
+            plot_dict[key] = (mean, sem, var, semvar)
+        else:
+            print(key, total_dict[key])
+
+    
+    # Filter data for the fixed parameter and organize by L values
+    plot_data = {}
+    for (L, p_ctrl, p_proj), (mean, sem, var, semvar) in plot_dict.items():
+        # Filter based on fixed parameter
+        if p_fixed_name == 'p_ctrl' and p_ctrl == p_fixed_value:
+            if L not in plot_data:
+                plot_data[L] = {'p_proj': [], 'mean': [], 'sem': [], 'variance': [], 'se_var': []}
+            
+            plot_data[L]['p_proj'].append(p_proj)
+            plot_data[L]['mean'].append(mean)
+            plot_data[L]['sem'].append(sem)
+            plot_data[L]['variance'].append(var)
+            plot_data[L]['se_var'].append(semvar)
+        elif p_fixed_name == 'p_proj' and p_proj == p_fixed_value:
+            if L not in plot_data:
+                plot_data[L] = {'p_ctrl': [], 'mean': [], 'sem': [], 'variance': [], 'se_var': []}
+            
+            plot_data[L]['p_ctrl'].append(p_ctrl)
+            plot_data[L]['mean'].append(mean)
+            plot_data[L]['sem'].append(sem)
+            plot_data[L]['variance'].append(var)
+            plot_data[L]['se_var'].append(semvar)
+
+    if not plot_data:
+        print(f"No data found for {p_fixed_name}={p_fixed_value}")
+        return
+
+    # Create plots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Get sorted L values and create color map
+    L_values = sorted(plot_data.keys())
+    n_L = len(L_values)
+    
+    # Create increasingly deeper shades of blue proportional to L value
+    colors = []
+    if n_L > 1:
+        min_L = min(L_values)
+        max_L = max(L_values)
+        
+        for L in L_values:
+            # Normalize L to range [0, 1]
+            norm_L = (L - min_L) / (max_L - min_L)
+            
+            # Create light blue to dark blue gradient
+            red = 0.7 * (1 - norm_L)      # From 0.7 to 0.0
+            green = 0.7 * (1 - norm_L)    # From 0.7 to 0.0  
+            blue = 1.0 - 0.2 * norm_L     # From 1.0 to 0.8
+            
+            blue_color = (red, green, blue)
+            colors.append(blue_color)
+    else:
+        colors = [(0.0, 0.0, 0.8)]  # Single dark blue color
+
+    # Determine x-axis variable and label
+    x_var = 'p_proj' if p_fixed_name == 'p_ctrl' else 'p_ctrl'
+    x_label = 'p_proj' if p_fixed_name == 'p_ctrl' else 'p_ctrl'
+
+    # Plot 1: x_var vs mean ± sem
+    for i, L in enumerate(L_values):
+        data = plot_data[L]
+        # Sort by x variable for cleaner lines
+        sorted_indices = np.argsort(data[x_var])
+        x_sorted = np.array(data[x_var])[sorted_indices]
+        mean_sorted = np.array(data['mean'])[sorted_indices]
+        sem_sorted = np.array(data['sem'])[sorted_indices]
+        
+        ax1.errorbar(x_sorted, mean_sorted, yerr=sem_sorted, 
+                    label=f'L={L}', marker='o', capsize=5, capthick=2, color=colors[i])
+
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel('Mean Entropy ± SEM')
+    ax1.set_title(f'Mean Entropy vs {x_label} for Different L ({p_fixed_name}={p_fixed_value})')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # Plot 2: x_var vs variance ± se_var
+    for i, L in enumerate(L_values):
+        data = plot_data[L]
+        # Sort by x variable for cleaner lines
+        sorted_indices = np.argsort(data[x_var])
+        x_sorted = np.array(data[x_var])[sorted_indices]
+        variance_sorted = np.array(data['variance'])[sorted_indices]
+        se_var_sorted = np.array(data['se_var'])[sorted_indices]
+        
+        ax2.errorbar(x_sorted, variance_sorted, yerr=se_var_sorted, 
+                    label=f'L={L}', marker='s', capsize=5, capthick=2, color=colors[i])
+
+    ax2.set_xlabel(x_label)
+    ax2.set_ylabel('Variance ± SEVar')
+    ax2.set_title(f'Variance vs {x_label} for Different L ({p_fixed_name}={p_fixed_value})')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    
+    # Save the plot
+    save_path = os.path.join(save_folder, f's0_threshold{threshold_val}_{p_fixed_name}{p_fixed_value}.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f'Plot saved to {save_path}')
+    plt.show()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+import pandas as pd
+
+def h5_to_csv(sv_combined, n, threshold: float, p_fixed_name: str, p_fixed_value: float, save_folder="/scratch/ty296/plots"):
+    groups = total_s0_dict(sv_combined, threshold)
+    # with h5py.File(sv_combined, 'r') as f:
+    #     from collections import defaultdict
+    #     groups = defaultdict(list)
+    #     for real_key in tqdm.tqdm(f.keys()):
+    #         s0 = von_neumann_entropy_sv(f[real_key][()], n=n, positivedefinite=False, threshold=threshold)
+    #         # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
+    #         key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
+    #         groups[key_val].append(s0)
+    
+    data = []
+    for key_val, s0_list in groups.items():
+        ensemble_size = len(s0_list)
+        # print(f'key_val {key_val} ensemble_size {ensemble_size}')
+        mean, sem = calculate_mean_and_error(s0_list)
+        if len(s0_list) > 1:
+            variance, se_var = calculate_variance_and_error(s0_list)
+        else:
+            variance, se_var = 0, 0
+        # print(key_val, "mean", mean, "sem", sem, "variance", variance, "se_var", se_var)
+        data.append(list(key_val) + [mean, sem, variance, se_var, ensemble_size])
+    # print(data)
+
+    df = pd.DataFrame(data, columns=['L', 'p_ctrl', 'p_proj', 'mean', 'sem', 'variance', 'se_var', 'ensemble_size'])
+    # save the data to a csv file
+    csv_path = os.path.join(save_folder, f's{n}_threshold{threshold:.1e}_{p_fixed_name}{p_fixed_value}.csv')
+    df.to_csv(csv_path, index=False)
+    print(f'threadhold {threshold} saved to {csv_path}')
+
+    return df
+
 def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, threshold: float) -> float:
     """
     Compute von Neumann entropy from singular values.

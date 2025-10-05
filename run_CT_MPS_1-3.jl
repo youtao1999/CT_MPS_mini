@@ -45,6 +45,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
                 for additional_time_step in 1:time_average
                     sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
                     push!(sv_arr_list, sv_arr)
+                    println("sv_arr_length: ", length(sv_arr))
                     i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
                 end
                 # implement time averaging: store the sv_arrs for multiple time steps

@@ -49,11 +49,6 @@ function main()
     job_list = JSON.parsefile(job_file)
     println("Loaded ", length(job_list), " jobs")
     
-    # Clean up the temporary file (only on rank 0 to avoid race conditions)
-    if rank == 0
-        rm(job_file)
-    end
-    
     # Convert other arguments to proper types
     p_fixed_name = args["p_fixed_name"]
     p_fixed_value = parse(Float64, args["p_fixed_value"])
