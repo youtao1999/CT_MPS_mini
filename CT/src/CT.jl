@@ -763,10 +763,10 @@ function max_bond_dim(mps::MPS)
     return max_dim
 end
 
-function all_bond_dim(mps::MPS)
+function all_bond_dim(mp::Union{MPO,MPS})
     dim_list = []
-    for i in 1:length(mps)-1
-        dim = commonind(mps[i], mps[i+1])
+    for i in 1:length(mp)-1
+        dim = commonind(mp[i], mp[i+1])
         push!(dim_list, space(dim))
     end
     return dim_list
@@ -822,6 +822,7 @@ function adder_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_r
         add1_6,add1_3=power_mpo(add1_mpo,[div(2^L,6)+1,div(2^L,3)])
         i2=phy_list[mod(i1,L)+1]    # 2
         add_condition=apply(add1_6,P_MPO([phy_ram[i2]],[0],qubit_site)) + apply(add1_3,P_MPO([phy_ram[i2]],[1],qubit_site))
+        println(all_bond_dim(add_condition))
         iLm2=phy_list[mod(i1+L-4,L)+1]  # L-2
         iLm1=phy_list[mod(i1+L-3,L)+1 ]   # L-1
         iL=phy_list[mod(i1+L-2,L)+1] # L i1+(L-1) -> L, (x-1)%L+1
@@ -829,7 +830,7 @@ function adder_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_r
         XI=XI_MPO([phy_ram[iLm1]],qubit_site)
 
         fix_spurs = apply(XI,P2) + I_MPO([phy_ram[iLm1]],qubit_site)
-        return apply(fix_spurs,add_condition)
+        return apply(fix_spurs,add_condition; cutoff=0.0, maxdim=_maxdim)
     else
         return nothing
     end

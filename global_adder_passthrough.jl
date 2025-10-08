@@ -58,44 +58,47 @@ function initialize_links(L, qubit_site, shift_1_3_bits, ram_phy)
     return carry_links, T_vec, id_vec, gate_vec
 end
 
-function global_adder(initial_state, carry_links, T_vec, id_vec, gate_vec, qubit_site, shift_1_3_bits, ram_phy; cutoff::Float64=1e-10, maxdim::Int=typemax(Int))
+function global_adder(initial_state, carry_links, T_vec, gate_vec, qubit_site; cutoff::Float64=0.0, maxdim::Int=2^(div(length(gate_vec),2)))
     for i1 in 1:length(gate_vec)
         gate = gate_vec[i1]
+        # println("gate index: ", i1, " ", inds(gate))
         # println(i1)
         if i1 == 1
             # psi_tensor = contract(initial_state[i1], initial_state[i1+1], gate)
             psi_tensor = gate * (initial_state[i1] * initial_state[i1+1])
-            # @time left_inds = filter_highest_tag_number(inds(psi_tensor))
-            # println("left_inds: ", left_inds)
-            # println(prime(qubit_site[i1]), carry_links[i1])
+            # println(inds(psi_tensor))
+            # println(Base.summarysize(psi_tensor))
             U, S, V = svd(psi_tensor, [prime(qubit_site[i1]), carry_links[i1]], lefttags = "Link,l=$(i1)", cutoff=cutoff, maxdim=maxdim)
+            # println(Base.summarysize(U))
+            # println(Base.summarysize(S))
+            # println(Base.summarysize(V))
             initial_state[i1] = U
             initial_state[i1+1] = S * V
             noprime!(initial_state)
         elseif i1 == 2
             psi_tensor = gate * (initial_state[i1] * initial_state[i1+1])
+            # println(Base.summarysize(psi_tensor))
             U, S, V = svd(psi_tensor, [prime(qubit_site[i1]), carry_links[i1], inds(initial_state[i1])[1], inds(initial_state[i1])[2]], lefttags = "Link,l=$(i1)", cutoff=cutoff, maxdim=maxdim)
+            # println(Base.summarysize(U))
+            # println(Base.summarysize(S))
+            # println(Base.summarysize(V))
             initial_state[i1] = U
             initial_state[i1+1] = S * V
             noprime!(initial_state)
         else
             # psi_tensor = contract(initial_state[i1-1], initial_state[i1], initial_state[i1+1], gate)
             psi_tensor = gate * (initial_state[i1-1] * initial_state[i1] * initial_state[i1+1])
-            all_3_inds = inds(psi_tensor)
-            # @time mid_inds = filter(idx -> occursin(string(i1), string(tags(idx))), all_3_inds)
-            # println([prime(qubit_site[i1]), carry_links[i1+1]])
-            # println("mid_inds: ", mid_inds)
-            # @time right_inds = filter(idx -> occursin(string(i1+1), string(tags(idx))), all_3_inds)
+            # println(Base.summarysize(psi_tensor))
             left_inds_1 = i1 == 3 ? [qubit_site[i1-1], carry_links[i1-1], inds(initial_state[i1-1])[3]] : [inds(initial_state[i1-1])[1], qubit_site[i1-1]]
-            # println(left_inds_1)
-            # println(setdiff(all_3_inds, right_inds, mid_inds))
-            # U1, S1, V1 = svd(psi_tensor, setdiff(all_3_inds, right_inds, mid_inds), lefttags = "Link,l=$(i1-1)")
+            # println(Base.summarysize(left_inds_1))
             U1, S1, V1 = svd(psi_tensor, left_inds_1, lefttags = "Link,l=$(i1-1)", cutoff=cutoff, maxdim=maxdim)
-            # left_inds_2 = union(mid_inds, filterinds(S1, tags="Link,l=$(i1-1)"))
-            # println(left_inds_2)
-            # println([prime(qubit_site[i1]), carry_links[i1+1], inds(U1)[end]])
-            # U2, S2, V2 = svd(S1 * V1, left_inds_2, lefttags = "Link,l=$(i1)")
+            # println(Base.summarysize(U1))
+            # println(Base.summarysize(S1))
+            # println(Base.summarysize(V1))
             U2, S2, V2 = svd(S1 * V1, [prime(qubit_site[i1]), carry_links[i1+1], inds(U1)[end]], lefttags = "Link,l=$(i1)", cutoff=cutoff, maxdim=maxdim)
+            # println(Base.summarysize(U2))
+            # println(Base.summarysize(S2))
+            # println(Base.summarysize(V2))
             initial_state[i1-1] = U1
             initial_state[i1] = U2
             initial_state[i1+1] = S2 * V2
@@ -103,24 +106,27 @@ function global_adder(initial_state, carry_links, T_vec, id_vec, gate_vec, qubit
         end
     end
     
-    lsb_tensor = ITensor(carry_links[2])
-    # println(inds(lsb_tensor))
-    # println(carry_links[2])
-    lsb_tensor[carry_links[2]=>1] = 1.0
-    initial_state[2] = initial_state[2] * lsb_tensor;
+    # lsb_tensor = ITensor(carry_links[2])
+    # lsb_tensor[carry_links[2]=>1] = 1.0
+    # initial_state[2] = initial_state[2] * lsb_tensor;
+
+    lsb = onehot(carry_links[2]=>1)
+    initial_state[2] = initial_state[2] * lsb;
     
     # discard the carry out of the msb tensor
     msb_tensor = ITensor(carry_links[1])
-    # println(inds(msb_tensor))
-    # println(carry_links[1])
     msb_tensor[carry_links[1]=>1] = 1.0
     msb_tensor[carry_links[1]=>2] = 1.0
     initial_state[1] = initial_state[1] * msb_tensor;
     
     psi = contract(initial_state[L-1], initial_state[L], T_vec[L])
+    # println(Base.summarysize(psi))
     # println(setdiff(inds(psi), filterinds(inds(psi), tags="Qubit,Site,n=$L")))
     # println([inds(initial_state[L-1])[1], qubit_site[L-1]])
     U, S, V = svd(psi, [inds(initial_state[L-1])[1], qubit_site[L-1]], lefttags = "Link,l=$(L-1)", cutoff=cutoff, maxdim=maxdim)
+    # println(Base.summarysize(U))
+    # println(Base.summarysize(S))
+    # println(Base.summarysize(V))
     initial_state[L-1] = U
     initial_state[L] = S * V
     return initial_state
@@ -241,4 +247,63 @@ function filter_highest_tag_number(indices)
         end
         return filtered_indices
     end
+end
+
+function sort_indices(tensor::ITensor, _tags::String)
+    indices = filterinds(inds(tensor), _tags)
+    sorted_inds = sort(collect(indices), by = x -> begin
+        tag_str = string(tags(x))
+        m = match(r"c=(\d+)", tag_str)
+        parse(Int, m.captures[1])
+    end)
+    return sorted_inds
+end
+
+function lower_prime_level(tensor::ITensor, _tags::String)
+    # this function lower the double prime level indices to single prime level
+    for index in filterinds(inds(tensor), _tags)
+        if plev(index) > 1
+            tensor = prime(tensor, -(plev(index)-1), index)
+        end
+    end
+    return tensor
+end
+
+# set the boundary condition so that we are not carrying dangling indices around
+function build_adder_mpo(qubit_site::Vector{Index{Int64}},L::Int,carry_links::Vector{Index{Int64}},gate_vec::Vector{ITensor},_eps::Float64,_maxdim::Int)
+    lsb_tensor = onehot(carry_links[2]=>1)
+
+    # discard the carry out of the msb tensor
+    msb_tensor = ITensor(carry_links[1])
+    msb_tensor[carry_links[1]=>1] = 1.0
+    msb_tensor[carry_links[1]=>2] = 1.0
+
+    gate_vec[1] = gate_vec[1] * msb_tensor
+    gate_vec[2] = gate_vec[2] * lsb_tensor
+    mpo_vec = [ITensor() for _ in 1:L];
+
+    tmp_tensor = gate_vec[1] * prime(gate_vec[2], "Qubit,Site,n=2") * prime(gate_vec[3], "Qubit,Site,n=3")
+    tmp_tensor = lower_prime_level(tmp_tensor, "Qubit,Site")
+
+    U, S, V = svd(tmp_tensor, [qubit_site[1], prime(qubit_site[1])], lefttags = "Link,l=1", cutoff=_eps, maxdim=_maxdim);
+
+    mpo_vec[1] = U
+    i1 = 4
+    while i1 <= length(gate_vec)
+        println("i1 = ", i1)
+        tmp_tensor = lower_prime_level(S * V * prime(gate_vec[i1], "Qubit,Site,n=$(i1)"), "Qubit,Site")
+        U, S, V = svd(tmp_tensor, [qubit_site[i1-2], prime(qubit_site[i1-2]), filterinds(tmp_tensor, tags="Link,l=$(i1-3)")...], lefttags = "Link,l=$(i1-2)", cutoff=_eps, maxdim=_maxdim);
+        # println(filter(x -> x >= 1e-10, vec(array(S))))
+        mpo_vec[i1-2] = U
+        i1 += 1
+    end
+
+    U, S, V = svd(S * V, [qubit_site[end-2], prime(qubit_site[end-2]), filterinds(S * V, tags="Link,l=$(L-3)")...], lefttags = "Link,l=$(L-2)", cutoff=_eps, maxdim=_maxdim);
+    mpo_vec[L-2] = U
+    U, S, V = svd(lower_prime_level(S * V * prime(T_vec[L], "Qubit,Site,n=$(L)"), "Qubit,Site"), [qubit_site[L-1], prime(qubit_site[L-1])], lefttags = "Link,l=$(L-1)", cutoff=_eps, maxdim=_maxdim);
+    mpo_vec[L-1] = U
+    mpo_vec[L] = S * V
+
+    return MPO(mpo_vec)
+
 end
