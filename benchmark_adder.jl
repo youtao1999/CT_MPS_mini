@@ -3,6 +3,7 @@ Pkg.activate("CT")
 using CT
 include("global_adder_passthrough.jl")
 
+using ProgressMeter
 # benchmark adder_MPO
 using ITensors
 # initialize random state
@@ -17,11 +18,11 @@ i1 = 1
 _maxdim = 2^(div(L,2))
 _maxdim0 = 50
 _eps = 0.0
-seed = 123457
+seed = 123457;
 x0 = nothing
 qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L, ancilla, folded)
-rng = MersenneTwister(seed_vec)
-rng_vec = seed_vec === nothing ? rng : MersenneTwister(seed_vec)
+rng = MersenneTwister(seed)
+rng_vec = seed === nothing ? rng : MersenneTwister(seed)
 shift_1_3_bits, shift_1_3_amount = fraction_to_binary_shift(1, 3, L)
 shift_1_6_bits, shift_1_6_amount = fraction_to_binary_shift(1, 6, L)
 # initial_state = _initialize_vector(L, ancilla, x0, folded, qubit_site, ram_phy, phy_ram, phy_list, rng_vec, _eps, _maxdim0);
@@ -63,7 +64,7 @@ for state_index in 1:2^L
 end
 
 
-for state_index in 1:2^L
+@showprogress for state_index in 1:2^L
     string_vec = lpad(string(state_index-1,base=2),L,"0")
     string_vec_folded = join([string_vec[ram_phy[i]] for i in 1:L])
     # Convention: RAM position i stores physical bit ram_phy[i]
@@ -74,24 +75,25 @@ for state_index in 1:2^L
     # @show CT.mps_element(initial_state, "000000001000"[ram_phy])
     final_state_1 = copy(initial_state)
     final_state_2 = copy(initial_state)
-    passthrough_state = copy(initial_state)
+    # passthrough_state = copy(initial_state)
     final_state_1 = apply(adder_passthrough,final_state_1; cutoff=_eps, maxdim=_maxdim);
-    passthrough_state = global_adder(passthrough_state, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
+    # passthrough_state = global_adder(passthrough_state, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
     final_state_2 = apply(add1_3,final_state_2; cutoff=_eps, maxdim=_maxdim);
     # @show CT.mps_element(final_state_2, "001010110011"[ram_phy])
     # @show display_state(final_state_2)[phy_ram]
     final_state_1_unfolded = [ display_state(final_state_1)[phy_ram[i]] for i in 1:L ]
     final_state_2_unfolded = [ display_state(final_state_2)[phy_ram[i]] for i in 1:L ]
-    passthrough_state_unfolded = [ display_state(passthrough_state)[phy_ram[i]] for i in 1:L ]
+    # passthrough_state_unfolded = [ display_state(passthrough_state)[phy_ram[i]] for i in 1:L ]
     # println(string_vec, "=>", join(final_state_1_unfolded))
     # println(string_vec, "=>", join(final_state_2_unfolded))
     if join(final_state_1_unfolded) != join(final_state_2_unfolded)
         println(string_vec)
         println(join(final_state_1_unfolded))
         println(join(final_state_2_unfolded))
-        println(join(passthrough_state_unfolded))
+        # println(dict_correct[join(string_vec)])
+        # println(join(passthrough_state_unfolded))
         println("wrong")
-        println("correct: ", dict_correct[join(string_vec)])
+        # println("correct: ", dict_correct[join(string_vec)])
 
     end
 
