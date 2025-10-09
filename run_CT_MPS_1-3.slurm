@@ -1,6 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=CT_MPS   # Job name with L parameter
+<<<<<<< Updated upstream
 #SBATCH --ntasks=4                # Number of tasks (processes)
+=======
+#SBATCH --ntasks=6                # Number of tasks (processes)
+#SBATCH --partition=mem
+>>>>>>> Stashed changes
 #SBATCH --requeue
 #SBATCH --cpus-per-task=1        # Number of CPU cores per task
 #SBATCH --time=20:00:00            # Time limit hrs:min:sec

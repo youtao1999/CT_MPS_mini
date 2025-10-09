@@ -232,6 +232,8 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; th
     if ct.ancilla == 0 || ct.ancilla ==1
         ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
         U_4_tensor = ITensor(U_4, ct.qubit_site[ram_idx[1]], ct.qubit_site[ram_idx[2]], ct.qubit_site[ram_idx[1]]', ct.qubit_site[ram_idx[2]]')
+        # U_4_tensor = ITensor(U_4, ct_f.qubit_site[ram_idx[1]], ct_f.qubit_site[ram_idx[2]], ct_f.qubit_site[ram_idx[1]]', ct_f.qubit_site[ram_idx[2]]')
+
         
         if ct.builtin
             ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
