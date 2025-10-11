@@ -10,22 +10,34 @@ using ITensors
 using .CT: _initialize_basis, _initialize_vector, P_MPO, XI_MPO, I_MPO, adder_MPO, add1, power_mpo
 using Random
 
-L = 12
+using Pkg
+Pkg.activate("CT")
+using CT
+
+# benchmark adder_MPO
+using ITensors
+# initialize random state
+using .CT: _initialize_basis, _initialize_vector, P_MPO, XI_MPO, I_MPO, adder_MPO, add1, power_mpo
+using Random
+
+L = 8
 ancilla = 0
 folded = true
+seed_vec = 123457
 xj = Set([1//3, 2//3])
 i1 = 1
+numerator = 1
+denominator = 3
 _maxdim = 2^(div(L,2))
-_maxdim0 = 50
-_eps = 0.0
-seed = 123457;
+_maxdim0 = 2^10
+_eps = 1e-10
+seed = 123457
 x0 = nothing
 qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L, ancilla, folded)
-rng = MersenneTwister(seed)
-rng_vec = seed === nothing ? rng : MersenneTwister(seed)
-shift_1_3_bits, shift_1_3_amount = fraction_to_binary_shift(1, 3, L)
-shift_1_6_bits, shift_1_6_amount = fraction_to_binary_shift(1, 6, L)
-# initial_state = _initialize_vector(L, ancilla, x0, folded, qubit_site, ram_phy, phy_ram, phy_list, rng_vec, _eps, _maxdim0);
+rng = MersenneTwister(seed_vec)
+rng_vec = seed_vec === nothing ? rng : MersenneTwister(seed_vec)
+shift_1_3_bits, shift_1_3_amount = fraction_to_binary_shift(numerator, denominator, L)
+initial_state = _initialize_vector(L, ancilla, x0, folded, qubit_site, ram_phy, phy_ram, phy_list, rng_vec, _eps, _maxdim0);
 
 # initialize haining adder mpo
 add1_mpo=MPO(add1(i1,L,phy_ram,phy_list),qubit_site)
@@ -55,60 +67,63 @@ adder_passthrough = build_adder_mpo(qubit_site,L,carry_links,gate_vec,_eps,_maxd
 
 dict_correct = Dict{String, String}()
 
-for state_index in 1:2^L
-    string_vec = lpad(string(state_index-1,base=2),L,"0")
-    correct_unfolded = lpad(string((state_index - 1 + shift_1_3_amount) % 2^L,base=2),L,"0")
-    string_vec_folded = join([string_vec[ram_phy[i]] for i in 1:L])
-    correct_folded = join([correct_unfolded[ram_phy[i]] for i in 1:L])
-    dict_correct[join(string_vec)] = join(correct_folded)
-end
+if abspath(PROGRAM_FILE) == @__FILE__
 
-
-@showprogress for state_index in 1:2^L
-    string_vec = lpad(string(state_index-1,base=2),L,"0")
-    string_vec_folded = join([string_vec[ram_phy[i]] for i in 1:L])
-    # Convention: RAM position i stores physical bit ram_phy[i]
-    # productMPS assigns to RAM positions, so use folded representation
-    vec = 1 .+ parse.(Int, [string(string_vec_folded[i]) for i in 1:L])
-    initial_state = productMPS(qubit_site, vec)
-
-    # @show CT.mps_element(initial_state, "000000001000"[ram_phy])
-    final_state_1 = copy(initial_state)
-    final_state_2 = copy(initial_state)
-    # passthrough_state = copy(initial_state)
-    final_state_1 = apply(adder_passthrough,final_state_1; cutoff=_eps, maxdim=_maxdim);
-    # passthrough_state = global_adder(passthrough_state, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
-    final_state_2 = apply(add1_3,final_state_2; cutoff=_eps, maxdim=_maxdim);
-    # @show CT.mps_element(final_state_2, "001010110011"[ram_phy])
-    # @show display_state(final_state_2)[phy_ram]
-    final_state_1_unfolded = [ display_state(final_state_1)[phy_ram[i]] for i in 1:L ]
-    final_state_2_unfolded = [ display_state(final_state_2)[phy_ram[i]] for i in 1:L ]
-    # passthrough_state_unfolded = [ display_state(passthrough_state)[phy_ram[i]] for i in 1:L ]
-    # println(string_vec, "=>", join(final_state_1_unfolded))
-    # println(string_vec, "=>", join(final_state_2_unfolded))
-    if join(final_state_1_unfolded) != join(final_state_2_unfolded)
-        println(string_vec)
-        println(join(final_state_1_unfolded))
-        println(join(final_state_2_unfolded))
-        # println(dict_correct[join(string_vec)])
-        # println(join(passthrough_state_unfolded))
-        println("wrong")
-        # println("correct: ", dict_correct[join(string_vec)])
-
+    for state_index in 1:2^L
+        string_vec = lpad(string(state_index-1,base=2),L,"0")
+        correct_unfolded = lpad(string((state_index - 1 + shift_1_3_amount) % 2^L,base=2),L,"0")
+        string_vec_folded = join([string_vec[ram_phy[i]] for i in 1:L])
+        correct_folded = join([correct_unfolded[ram_phy[i]] for i in 1:L])
+        dict_correct[join(string_vec)] = join(correct_folded)
     end
 
-    # println(string_vec, "=>", display_state(final_state_1), "<=>", display_state(final_state_2))
-    # println(display_state(final_state_1) == display_state(final_state_2))
+
+    @showprogress for state_index in 1:2^L
+        string_vec = lpad(string(state_index-1,base=2),L,"0")
+        string_vec_folded = join([string_vec[ram_phy[i]] for i in 1:L])
+        # Convention: RAM position i stores physical bit ram_phy[i]
+        # productMPS assigns to RAM positions, so use folded representation
+        vec = 1 .+ parse.(Int, [string(string_vec_folded[i]) for i in 1:L])
+        initial_state = productMPS(qubit_site, vec)
+
+        # @show CT.mps_element(initial_state, "000000001000"[ram_phy])
+        final_state_1 = copy(initial_state)
+        final_state_2 = copy(initial_state)
+        # passthrough_state = copy(initial_state)
+        final_state_1 = apply(adder_passthrough,final_state_1; cutoff=_eps, maxdim=_maxdim);
+        # passthrough_state = global_adder(passthrough_state, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
+        final_state_2 = apply(add1_3,final_state_2; cutoff=_eps, maxdim=_maxdim);
+        # @show CT.mps_element(final_state_2, "001010110011"[ram_phy])
+        # @show display_state(final_state_2)[phy_ram]
+        final_state_1_unfolded = [ display_state(final_state_1)[phy_ram[i]] for i in 1:L ]
+        final_state_2_unfolded = [ display_state(final_state_2)[phy_ram[i]] for i in 1:L ]
+        # passthrough_state_unfolded = [ display_state(passthrough_state)[phy_ram[i]] for i in 1:L ]
+        # println(string_vec, "=>", join(final_state_1_unfolded))
+        # println(string_vec, "=>", join(final_state_2_unfolded))
+        if join(final_state_1_unfolded) != join(final_state_2_unfolded)
+            println(string_vec)
+            println(join(final_state_1_unfolded))
+            println(join(final_state_2_unfolded))
+            # println(dict_correct[join(string_vec)])
+            # println(join(passthrough_state_unfolded))
+            println("wrong")
+            # println("correct: ", dict_correct[join(string_vec)])
+
+        end
+
+        # println(string_vec, "=>", display_state(final_state_1), "<=>", display_state(final_state_2))
+        # println(display_state(final_state_1) == display_state(final_state_2))
+    end
+
+    # # warm up
+    # initial_state = randomMPS(qubit_site, L)
+    # final_state_1 = copy(initial_state)
+    # final_state_2 = copy(initial_state)
+    # final_state_1 = global_adder(final_state_1, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
+    # final_state_2 = apply(add1_6,final_state_2; cutoff=_eps, maxdim=_maxdim);
+
+    # # benchmark
+    # @time final_state_2 = apply(add1_6,final_state_2; cutoff=_eps, maxdim=_maxdim);
+
+    # @time final_state_1 = global_adder(final_state_1, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
 end
-
-# # warm up
-# initial_state = randomMPS(qubit_site, L)
-# final_state_1 = copy(initial_state)
-# final_state_2 = copy(initial_state)
-# final_state_1 = global_adder(final_state_1, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);
-# final_state_2 = apply(add1_6,final_state_2; cutoff=_eps, maxdim=_maxdim);
-
-# # benchmark
-# @time final_state_2 = apply(add1_6,final_state_2; cutoff=_eps, maxdim=_maxdim);
-
-# @time final_state_1 = global_adder(final_state_1, carry_links, T_vec, gate_vec, qubit_site; cutoff=_eps, maxdim=_maxdim);

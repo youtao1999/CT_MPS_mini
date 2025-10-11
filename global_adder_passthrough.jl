@@ -270,7 +270,7 @@ function lower_prime_level(tensor::ITensor, _tags::String)
 end
 
 # set the boundary condition so that we are not carrying dangling indices around
-function build_adder_mpo(qubit_site::Vector{Index{Int64}},L::Int,carry_links::Vector{Index{Int64}},gate_vec::Vector{ITensor},_eps::Float64,_maxdim::Int)
+function build_adder_mpo(qubit_site::Vector{Index{Int64}},L::Int,carry_links::Vector{Index{Int64}},gate_vec::Vector{ITensor}, T_vec::Vector{ITensor},_eps::Float64,_maxdim::Int)
     lsb_tensor = onehot(carry_links[2]=>1)
 
     # discard the carry out of the msb tensor
@@ -290,7 +290,6 @@ function build_adder_mpo(qubit_site::Vector{Index{Int64}},L::Int,carry_links::Ve
     mpo_vec[1] = U
     i1 = 4
     while i1 <= length(gate_vec)
-        println("i1 = ", i1)
         tmp_tensor = lower_prime_level(S * V * prime(gate_vec[i1], "Qubit,Site,n=$(i1)"), "Qubit,Site")
         U, S, V = svd(tmp_tensor, [qubit_site[i1-2], prime(qubit_site[i1-2]), filterinds(tmp_tensor, tags="Link,l=$(i1-3)")...], lefttags = "Link,l=$(i1-2)", cutoff=_eps, maxdim=_maxdim);
         # println(filter(x -> x >= 1e-10, vec(array(S))))
@@ -317,9 +316,11 @@ function conn_pairs(L::Int)
 
     translations = [circshift(1:L, shift) for shift in 0:L-1]
     conn_pairs_dict = Dict()
+    folded_ram_phy_dict = Dict()
     for (i1, translation) in enumerate(translations)
         # println(fold(translation, 0))
         ram_phy, phy_ram = fold(translation, 0)
+        folded_ram_phy_dict[i1] = ram_phy
         # println(ram_phy)
         pairs = []
         for i in reverse(collect(1:L)[2:end])
@@ -332,7 +333,7 @@ function conn_pairs(L::Int)
 
         conn_pairs_dict[i1] = pairs
     end
-    return conn_pairs_dict
+    return conn_pairs_dict, folded_ram_phy_dict
 end
 
 function fold(translation, ancilla::Int)
@@ -353,42 +354,40 @@ function fold(translation, ancilla::Int)
     return ram_phy, phy_ram
 end
 
-function initialize_gate_vec(pairings_fixed_i1, shift_bits, qubit_site, L)
+function initialize_gate_vec(pairings_fixed_i1, shift_bits, qubit_site, L, ram_phy)
 
     carry_links = [Index(2, "Carry,c=$(ram_pos-1)") for ram_pos in 1:L+1]
 
     gate_vec = ITensor[]
 
-    for _pair in pairings_fixed_i1
+    for (i, _pair) in enumerate(pairings_fixed_i1)
         if _pair[2] - _pair[1] == 1
             # forward one
-            T_tensor = create_addition_tensor_with_carry(shift_bits[_pair[1]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[_pair[2]])
+            T_tensor = create_addition_tensor_with_carry(shift_bits[ram_phy[_pair[1]]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[_pair[2]])
             push!(gate_vec, T_tensor)
         elseif _pair[2] - _pair[1] == 2
             # next nearest neighbor case, need to create two qubit gates
             mid_pos = (_pair[1] + _pair[2]) ÷ 2
-            T_tensor = create_addition_tensor_with_carry(shift_bits[_pair[1]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[mid_pos])
+            T_tensor = create_addition_tensor_with_carry(shift_bits[ram_phy[_pair[1]]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[mid_pos])
             id_tensor = create_identity_tensor_4d(qubit_site[mid_pos], prime(qubit_site[mid_pos]), carry_links[mid_pos], carry_links[_pair[2]])
             gate = T_tensor * id_tensor
             push!(gate_vec, gate)
         elseif _pair[2] - _pair[1] == -2
             # next nearest neighbor case, need to create two qubit gates
             mid_pos = (_pair[1] + _pair[2]) ÷ 2
-            T_tensor = create_addition_tensor_with_carry(shift_bits[_pair[1]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[mid_pos])
+            T_tensor = create_addition_tensor_with_carry(shift_bits[ram_phy[_pair[1]]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[mid_pos])
             id_tensor = create_identity_tensor_4d(qubit_site[mid_pos], prime(qubit_site[mid_pos]), carry_links[mid_pos], carry_links[_pair[2]])
             gate = T_tensor * id_tensor
             push!(gate_vec, gate)
         elseif _pair[2] - _pair[1] == -1
             # backward one
-            T_tensor = create_addition_tensor_with_carry(shift_bits[_pair[1]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[_pair[2]])
+            T_tensor = create_addition_tensor_with_carry(shift_bits[ram_phy[_pair[1]]], qubit_site[_pair[1]], prime(qubit_site[_pair[1]]), carry_links[_pair[1]], carry_links[_pair[2]])
             push!(gate_vec, T_tensor)
         else
             # more than next nearest neighbor, not implemented yet
             error("Not implemented yet")
         end
     end
-
-
 
     # locate the lsb link
     lsb_link = setdiff(filterinds(inds(gate_vec[1]), "Carry"), filterinds(inds(gate_vec[2]), "Carry"))
@@ -518,16 +517,18 @@ function create_mpo(gate_vec_collapsed)
 
     return MPO(mpo_vec)
 end
+
 function adder_mpo_vec(L, ancilla, folded, numerator, denominator)
     adder_mpo_vec = MPO[]
+    conn_pairs_dict, folded_ram_phy_dict = conn_pairs(L)
     for i1 in 1:L
-        println("constructed the $(i1)-th mpo")
         shift_bits, _ = fraction_to_binary_shift(numerator, denominator, L)
-        qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L, ancilla, folded)
-        pairing_fixed_i1 = conn_pairs(L)[i1]
+        qubit_site, _, _, _ = _initialize_basis(L, ancilla, folded)
+        ram_phy = folded_ram_phy_dict[i1]
+        pairing_fixed_i1 = conn_pairs_dict[i1]
 
         # initialize the gate vector
-        gate_vec = initialize_gate_vec(pairing_fixed_i1, shift_bits, qubit_site, L)
+        gate_vec = initialize_gate_vec(pairing_fixed_i1, shift_bits, qubit_site, L, ram_phy)
 
         # sort the gate vector according to the qubit site number
         gate_sites = [qubit_site_number(gate) for gate in gate_vec]
