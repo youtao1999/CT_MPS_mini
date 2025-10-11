@@ -403,7 +403,7 @@ function initialize_gate_vec(pairings_fixed_i1, shift_bits, qubit_site, L, ram_p
     msb_tensor[msb_link=>1] = 1.0
     msb_tensor[msb_link=>2] = 1.0
 
-    msb_T_tensor = create_addition_tensor_with_carry(shift_bits[msb_pos], qubit_site[msb_pos], prime(qubit_site[msb_pos]), msb_carry_in..., msb_link)
+    msb_T_tensor = create_addition_tensor_with_carry(shift_bits[ram_phy[msb_pos]], qubit_site[msb_pos], prime(qubit_site[msb_pos]), msb_carry_in..., msb_link)
     msb_T_tensor = msb_T_tensor * msb_tensor
     push!(gate_vec, msb_T_tensor)
 
@@ -518,12 +518,12 @@ function create_mpo(gate_vec_collapsed)
     return MPO(mpo_vec)
 end
 
-function adder_mpo_vec(L, ancilla, folded, numerator, denominator)
+function adder_mpo_vec(L, qubit_site, ancilla, folded, numerator, denominator)
     adder_mpo_vec = MPO[]
     conn_pairs_dict, folded_ram_phy_dict = conn_pairs(L)
     for i1 in 1:L
         shift_bits, _ = fraction_to_binary_shift(numerator, denominator, L)
-        qubit_site, _, _, _ = _initialize_basis(L, ancilla, folded)
+        # qubit_site, _, _, _ = _initialize_basis(L, ancilla, folded)
         ram_phy = folded_ram_phy_dict[i1]
         pairing_fixed_i1 = conn_pairs_dict[i1]
 
