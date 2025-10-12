@@ -21,47 +21,33 @@ function sv_check(mps::MPS, eps::Float64, L::Int)
 end
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64, eps::Float64,seed::Int;n::Int=0,time_average::Union{Int,Nothing}=nothing)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1 // 3, 2 // 3]),_maxdim=maxdim, builtin=false, _eps=eps)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1 // 3, 2 // 3]),_maxdim=maxdim, builtin=false,_eps=eps, passthrough=true)
     println("ct_f memory usage: ", Base.summarysize(ct_f) / 2^20, " MB")
     i=1
-    # println(ct_f.xj)    
-    # T_max = 1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
-    # Write a single string
-    open("/scratch/ty296/logs/$(L)_$(p_ctrl)_$(p_proj)_$(ancilla)_$(maxdim)_$(threshold)_$(eps)_$(seed).txt", "w") do file
-        # write(file, "Hello, World!\n")
-        for idx in 1:T_max
-            i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-            # println(ct_f.mps)
-            # println(sv_check_dict)
-            heap_memory_usage = Base.gc_live_bytes() / 1024^2
-            max_rss = Sys.maxrss() / 1024^2
-            println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
-            write(file, "$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB\n")
-        end
-        O=CT.order_parameter(ct_f)
-        max_bond= CT.max_bond_dim(ct_f.mps)
-        if ancilla ==0 
-            if time_average !== nothing && time_average > 1
-                # Multiple time steps - return 2D data (list of arrays)
-                sv_arr_list = Vector{Vector{Float64}}()
-                for additional_time_step in 1:time_average
-                    sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
-                    push!(sv_arr_list, sv_arr)
-                    println("sv_arr_length: ", length(sv_arr))
-                    i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-                end
-                # implement time averaging: store the sv_arrs for multiple time steps
-                return O, sv_arr_list, max_bond, ct_f._eps
-            else
-                # Single time step - return 1D data
+    for idx in 1:T_max
+        @time i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        heap_memory_usage = Base.gc_live_bytes() / 1024^2
+        max_rss = Sys.maxrss() / 1024^2
+        println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
+    end
+    O=CT.order_parameter(ct_f)
+    max_bond= CT.max_bond_dim(ct_f.mps)
+    if ancilla ==0 
+        if time_average !== nothing && time_average > 1
+            # Multiple time steps - return 2D data (list of arrays)
+            sv_arr_list = Vector{Vector{Float64}}()
+            for additional_time_step in 1:time_average
                 sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
-                # vector_sv_arr = vec(array(contract(ct_f.mps)))
-                # println(typeof(vector_sv_arr), " ", size(vector_sv_arr), vector_sv_arr[1:10])
-                # println("Norm of MPS: ", norm(ct_f.mps))
-                # println(typeof(sv_arr), " ", size(sv_arr))
-                return O, sv_arr, max_bond, ct_f._eps
+                push!(sv_arr_list, sv_arr)
+                i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             end
+            # implement time averaging: store the sv_arrs for multiple time steps
+            return O, sv_arr_list, max_bond, ct_f._eps
+        else
+            # Single time step - return 1D data
+            sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
+            return O, sv_arr, max_bond, ct_f._eps
         end
     end
 end
@@ -99,7 +85,7 @@ function store_result_hdf5(filename::String, result_idx::Int, O::Float64, entrop
                           p_ctrl::Float64, p_proj::Float64, realization::Int, 
                           args::Dict, seed::Int)
     
-    # # Delete file if it exists to ensure clean overwrite
+    # Delete file if it exists to ensure clean overwrite
     if isfile(filename)
         rm(filename)
     end

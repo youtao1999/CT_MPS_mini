@@ -2,7 +2,7 @@
 #SBATCH --requeue
 #SBATCH --cpus-per-task=2        # Number of CPU cores per task
 #SBATCH --mem=128G                # Total memory for all tasks
-#SBATCH --time=20:00:00            # Time limit hrs:min:sec
+#SBATCH --time=30:00:00            # Time limit hrs:min:sec
 #SBATCH --output=/scratch/ty296/logs/%j.out            # Standard output log
 #SBATCH --error=/scratch/ty296/logs/%j.err             # Standard error log
 #SBATCH --partition=main
@@ -30,7 +30,7 @@ export OPENBLAS_NUM_THREADS=2
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
 # Temporarily removing sysimage to test MPI configuration
-mpirun -n $SLURM_NTASKS julia --heap-size-hint=10G --project=/scratch/ty296/CT_MPS_mini/CT \
+mpirun -n $SLURM_NTASKS julia --heap-size-hint=15G --project=/scratch/ty296/CT_MPS_mini/CT \
     /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
     --L $L \
     --job_file $JOB_FILE \
@@ -50,4 +50,4 @@ mpirun -n $SLURM_NTASKS julia --heap-size-hint=10G --project=/scratch/ty296/CT_M
 #     --ancilla 0 \
 #     --maxdim 1024 \
 #     --threshold 1e-15 \
-#     --eps 1e-10
+#     --eps 0.0

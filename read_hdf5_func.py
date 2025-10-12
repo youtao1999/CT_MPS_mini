@@ -32,26 +32,37 @@ def plot_sv_arr(filename):
 def combine(combined_sv_filename, p_fixed_name, p_fixed_value):
     all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", "*", "**"))
     with h5py.File(combined_sv_filename, 'w') as f_target:
-        for filename in all_files:
-            with h5py.File(filename, 'r+') as f_source:
-                dataset = f_source['singular_values']
-                # print(len(dataset[:]))
-                attrs = dataset.attrs
-                # print(attrs.keys())
-                dataset_target = f_target.create_dataset(f'sv_arr_L{int(attrs["L"])}_pctrl{float(attrs["p_ctrl"])}_pproj{float(attrs["p_proj"])}_seed{int(attrs["seed"])}', data=np.transpose(dataset[:]))
-                dataset_target.attrs.update(attrs)
+        for filename in tqdm.tqdm(all_files):
+            try:
+                with h5py.File(filename, 'r+') as f_source:
+                    dataset = f_source['singular_values']
+                    attrs = dataset.attrs
+                    # Create dataset name
+                    dataset_name = f'sv_arr_L{int(attrs["L"])}_pctrl{float(attrs["p_ctrl"])}_pproj{float(attrs["p_proj"])}_seed{int(attrs["seed"])}'
+                    
+                    # Check if name already exists, skip if duplicate
+                    if dataset_name in f_target:
+                        print(f"DUPLICATE DATASET (skipping): seed={int(attrs['seed'])}")
+                        print(f"  Parameters: L={int(attrs['L'])}, p_ctrl={float(attrs['p_ctrl'])}, p_proj={float(attrs['p_proj'])}")
+                        print(f"  File: {filename}")
+                        continue
+                    
+                    dataset_target = f_target.create_dataset(dataset_name, data=np.transpose(dataset[:]))
+                    dataset_target.attrs.update(attrs)
+            except OSError as e:
+                print(f"CORRUPTED FILE (removing): {filename}")
+                print(f"  Error: {e}")
+                os.remove(filename)
+                print(f"  File deleted successfully")
+                continue
 
 def total_s0_dict(combined_sv_filename, threshold_val):
-
-    # with h5py.File(sv_combined, 'r') as f:
-    # from collections import defaultdict
-    # groups = defaultdict(list)
-    # for real_key in tqdm.tqdm(f.keys()):
-    #     s0 = von_neumann_entropy_sv(f[real_key][()], n=n, positivedefinite=False, threshold=threshold)
-    #     # print(f[real_key].attrs['p_proj'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['L'],f[real_key].attrs['maxbond'],s0)
-    #     key_val = (f[real_key].attrs['L'],f[real_key].attrs['p_ctrl'],f[real_key].attrs['p_proj'])
-    #     groups[key_val].append(s0)
-
+    """
+    Groups entropy values by (L, p_ctrl, p_proj) from combined HDF5 file.
+    
+    Returns:
+        total_dict: {(L, p_ctrl, p_proj): array of entropy values}
+    """
     total_dict = {}
     with h5py.File(combined_sv_filename, 'r') as f:
         for key in list(f.keys()):
@@ -60,10 +71,15 @@ def total_s0_dict(combined_sv_filename, threshold_val):
                 s = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
             else:
                 s = []
-                # print("sv_arr_list: ", f[key][()].shape)
                 for sv_arr in f[key][()]:
                     s.append(von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val))
                 s = np.array(s)
+            
+            # Check if s contains any infinity values
+            if np.any(np.isinf(s)):
+                print(f"INFINITY VALUE (skipping): seed={seed}")
+                print(f"  Parameters: L={L}, p_ctrl={p_ctrl}, p_proj={p_proj}")
+                continue
             
             if (L, p_ctrl, p_proj) not in total_dict:
                 total_dict[(L, p_ctrl, p_proj)] = [s]
@@ -84,6 +100,21 @@ def distribution_dict(combined_sv_filename, L_target, threshold_val):
         for key in list(f.keys()):
             L, p_ctrl, p_proj, seed = parse_name(key)
             if L == L_target:
+
+                if 'max_bond' in f[key].attrs.keys():
+                    maxbond = f[key].attrs['max_bond']
+                    if (L, p_ctrl, p_proj) not in maxbond_dict:
+                        maxbond_dict[(L, p_ctrl, p_proj)] = [maxbond]
+                    else:
+                        maxbond_dict[(L, p_ctrl, p_proj)].append(maxbond)
+
+                # Calculate entropy first to check for infinity before adding anything
+                entropy = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
+                if np.any(np.isinf(entropy)):
+                    print(f"INFINITY VALUE (skipping): seed={seed}")
+                    print(f"  Parameters: L={L}, p_ctrl={p_ctrl}, p_proj={p_proj}")
+                    continue
+                
                 if f[key][()].ndim == 1:
                     min_sv = np.min(f[key][()])
                 else:
@@ -92,27 +123,27 @@ def distribution_dict(combined_sv_filename, L_target, threshold_val):
                         min_sv.append(np.min(sv_arr))
                     min_sv = np.array(min_sv)
                 
+                # Check if min_sv is too small (< 1e-10) or contains inf
+                if np.any(np.isinf(min_sv)) or np.any(min_sv == 0.0):
+                    print(f"INVALID MIN_SV (skipping): seed={seed}")
+                    print(f"  Parameters: L={L}, p_ctrl={p_ctrl}, p_proj={p_proj}")
+                    print(f"  min_sv value: {min_sv if np.isscalar(min_sv) else np.min(min_sv)}")
+                    continue
+                
                 if (L, p_ctrl, p_proj) not in min_sv_dict:
                     min_sv_dict[(L, p_ctrl, p_proj)] = [min_sv]
                 else:
                     min_sv_dict[(L, p_ctrl, p_proj)].append(min_sv)
             
-                if 'max_bond' in f[key].attrs.keys():
-                    maxbond = f[key].attrs['max_bond']
-                    if (L, p_ctrl, p_proj) not in maxbond_dict:
-                        maxbond_dict[(L, p_ctrl, p_proj)] = [maxbond]
-                    else:
-                        maxbond_dict[(L, p_ctrl, p_proj)].append(maxbond)
-
-                entropy = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
                 if (L, p_ctrl, p_proj) not in entropy_dict:
                     entropy_dict[(L, p_ctrl, p_proj)] = [entropy]
                 else:
                     entropy_dict[(L, p_ctrl, p_proj)].append(entropy)
     return min_sv_dict, maxbond_dict, entropy_dict
 
-def plot_distribution(data_dict, n_plots=12, x_label='s0', log_scale=False, n_bins=20):
-    n_plots = 12
+def plot_distribution(data_dict, n_plots=None, x_label='s0', log_scale=False, n_bins=20):
+    if n_plots is None:
+        n_plots = len(data_dict)
     n_cols = 3
     n_rows = (n_plots + n_cols - 1) // n_cols
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 5*n_rows))

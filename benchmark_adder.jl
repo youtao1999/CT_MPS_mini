@@ -23,17 +23,21 @@ rng_vec = seed_vec === nothing ? rng : MersenneTwister(seed_vec)
 ct_h = CT_MPS(L=L,xj=xj,folded=folded,_maxdim=_maxdim,ancilla=ancilla,seed_vec=seed_vec,seed=seed,x0=x0,debug=false);
 ct_t = CT_MPS(L=L,xj=xj,folded=folded,_maxdim=_maxdim,ancilla=ancilla,seed_vec=seed_vec,seed=seed,x0=x0,debug=false,passthrough=true);
 
-global i, j
-i = 1
-j = 1
-p_ctrl = 0.4
-p_proj = 0.7
-
-ancilla = 0
-T_max = ancilla == 0 ? 2*(ct_h.L^2) : div(ct_h.L^2,2)
-# Write a single string
-for _ in 1:T_max
-    global i, j
-    @time i = CT.random_control!(ct_h,i,p_ctrl,p_proj)
-    @time j = CT.random_control!(ct_t,j,p_ctrl,p_proj)
+for i1 in 1:L
+    println(all_bond_dim(ct_h.adder[i1]))
+    pirntln(all_bond_dim(ct_t.adder[i1]))
 end
+# global i, j
+# i = 1
+# j = 1
+# p_ctrl = 0.4
+# p_proj = 0.7
+
+# ancilla = 0
+# T_max = ancilla == 0 ? 2*(ct_h.L^2) : div(ct_h.L^2,2)
+# # Write a single string
+# for _ in 1:T_max
+#     global i, j
+#     @time i = CT.random_control!(ct_h,i,p_ctrl,p_proj)
+#     @time j = CT.random_control!(ct_t,j,p_ctrl,p_proj)
+# end
