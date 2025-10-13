@@ -74,16 +74,16 @@ function CT_MPS(
     rng_C = seed_C === nothing ? rng : MersenneTwister(seed_C)
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
-    println("initialize basis done")
+    # println("initialize basis done")
     @time mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
-    println("initialize vector done")
+    # println("initialize vector done")
     adder=[] # initialize empty adder
     if passthrough
         adder=adder_mpo_vec(L, xj, qubit_site, ancilla, folded, phy_list, phy_ram);
     else
         adder=[adder_MPO(i1,xj,qubit_site,L,phy_ram,phy_list) for i1 in 1:L];
     end
-    println("initialize adder done ", Base.summarysize(adder) / 2^20, " MB")
+    # println("initialize adder done ", Base.summarysize(adder) / 2^20, " MB")
     # dw=[[dw_MPO(i1,xj,qubit_site,L,phy_ram,phy_list,order) for i1 in 1:L] for order in 1:2]
     dw=[]
     # println('initialize dw done')
@@ -292,7 +292,7 @@ end
 function R!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     P!(ct, n, i)
     if ct.xj in Set([Set([1 // 3, 2 // 3]),Set([0])])
-        println("Resetting $(i) with outcome $(n)")
+        # println("Resetting $(i) with outcome $(n)")
         if n[1]==1
             X!(ct,i[1])
             # print("X")
@@ -828,6 +828,7 @@ function adder_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_r
         add1_mpo=MPO(add1(i1,L,phy_ram,phy_list),qubit_site)
         # print(add1_mpo)
         add1_6,add1_3=power_mpo(add1_mpo,[div(2^L,6)+1,div(2^L,3)])
+        # println("bond dims of add1_3 iterative: ", all_bond_dim(add1_3))
         # println("bond dims before fix spurs: ", all_bond_dim(add1_3))
         i2=phy_list[mod(i1,L)+1]    # 2
         add_condition=apply(add1_6,P_MPO([phy_ram[i2]],[0],qubit_site)) + apply(add1_3,P_MPO([phy_ram[i2]],[1],qubit_site))
@@ -884,7 +885,7 @@ function dw_MPO(i1::Int,xj::Set,qubit_site::Vector{Index{Int64}},L::Int,phy_ram:
 end
 
 function von_Neumann_entropy(mps::MPS, i::Int, threshold::Float64, eps::Float64; n::Int=1,positivedefinite=false,sv=false)
-    println("from SvN, n=$n, threshold=$threshold")
+    # println("from SvN, n=$n, threshold=$threshold")
     mps_ = orthogonalize(mps, i)
     _, S = svd(mps_[i], (linkind(mps_, i),); cutoff=eps)
     if sv
@@ -1200,6 +1201,7 @@ function adder_mpo_vec(L::Int64, xj::Set{Rational{Int64}}, qubit_site::Vector{In
         for i1 in 1:L
             add_1_3 = adder_mpo_vec_single_number(i1, L, qubit_site, ancilla, folded, 1, 3)
             add_1_6 = adder_mpo_vec_single_number(i1, L, qubit_site, ancilla, folded, 1, 6)
+            # println("bond dims of add1_3 passthrough: ", all_bond_dim(add_1_3))
             # println("bond dims before fix spurs: ", all_bond_dim(add_1_3), " ", all_bond_dim(add_1_6))
             i2=phy_list[mod(i1,L)+1]    # 2
             add_condition=apply(add_1_6,P_MPO([phy_ram[i2]],[0],qubit_site)) + apply(add_1_3,P_MPO([phy_ram[i2]],[1],qubit_site))
@@ -1224,3 +1226,73 @@ greet() = print("Hello World! How are 121?")
 
 
 end # module CT
+
+
+using ITensors
+
+######### helper functions for testing #########
+
+function all_bond_dim(mp::Union{MPO,MPS})
+    dim_list = []
+    for i in 1:length(mp)-1
+        dim = commonind(mp[i], mp[i+1])
+        push!(dim_list, space(dim))
+    end
+    return dim_list
+end
+
+function entanglement_spectrum(psi::MPS, cut_position::Int)
+    # Make a copy and move orthogonality center
+    psi_copy = copy(psi)
+    orthogonalize!(psi_copy, cut_position)
+    
+    # Get the bond connecting cut_position and cut_position+1
+    bond_idx = commonind(psi_copy[cut_position], psi_copy[cut_position+1])
+    # println(bond_idx)
+    # println(psi_copy[cut_position])
+    # SVD the tensor at cut_position
+    U, S, V = svd(psi_copy[cut_position], bond_idx)
+    
+    return diag(S)
+end
+
+function check_entanglement_spectrum(initial_state::MPS, ram_phy::Vector{Int}, shift_bits::Vector{Int})
+    L = length(shift_bits)
+    for cut in 1:L-1
+        spectrum = entanglement_spectrum(initial_state, cut)
+        println("Cut between sites $cut and $(cut+1): ", spectrum)
+    end
+end
+
+function print_nonzero_coordinates(T)
+    # Get the dimensions of the tensor
+    dims = size(T)
+    
+    # Iterate through all possible indices
+    for idx in CartesianIndices(dims)
+        # Check if element is nonzero
+        if T[idx] != 0
+            # Convert CartesianIndex to tuple for cleaner output
+            coords = Tuple(idx)
+            println("Nonzero at coordinates $coords: $(T[idx])")
+        end
+    end
+end
+
+
+function display_state(state)
+    contracted = contract(state)
+    state_vec = vec(Array(contracted, inds(contracted)...))
+    # @show argmax(state_vec)
+    loc = findall(x->abs(x)>1e-1, state_vec)
+    # println(state_vec[loc])
+    if length(loc) > 0
+        pos = loc[1] - 1
+        # ITensors native ordering: site 1 = rightmost bit in binary position
+        # We reversed input, so reverse output to match our convention
+        binary = string(pos, base=2, pad=L)
+        return reverse(binary)  # site 1 = leftmost bit in our convention
+    else
+        return "0"^L
+    end
+end

@@ -21,11 +21,11 @@ module load gcc/14.2.0-cermak # GCC compiler
 module load gcc/14.2.0/openmpi/5.0.5-cermak # Base OpenMPI module
 module load gcc/14.2.0/openmpi/5.0.5/hdf5/1.14.5-cermak # HDF5 module compiled with GCC 14.2.0
 
-# Set threading environment (following SLURM script pattern)
-export JULIA_NUM_THREADS=4
-export MKL_NUM_THREADS=4
-export OMP_NUM_THREADS=2
-export OPENBLAS_NUM_THREADS=2
+# # Set threading environment (following SLURM script pattern)
+# export JULIA_NUM_THREADS=4
+# export MKL_NUM_THREADS=4
+# export OMP_NUM_THREADS=2
+# export OPENBLAS_NUM_THREADS=2
 
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
