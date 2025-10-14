@@ -75,7 +75,7 @@ function CT_MPS(
     rng_m = seed_m === nothing ? rng : MersenneTwister(seed_m)
     qubit_site, ram_phy, phy_ram, phy_list = _initialize_basis(L,ancilla,folded)
     # println("initialize basis done")
-    @time mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
+    mps=_initialize_vector(L,ancilla,x0,folded,qubit_site,ram_phy,phy_ram,phy_list,rng_vec,_eps,_maxdim0)
     # println("initialize vector done")
     adder=[] # initialize empty adder
     if passthrough
@@ -122,7 +122,7 @@ function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational
             vec_int_pos = [string(s) for s in lpad(string(vec_int, base=2), L, "0")] # physical index
             return MPS(ComplexF64, qubit_site, [vec_int_pos[ram_phy[i]] for i in 1:L])
         else
-            println("initializing random MPS with linkdims $_maxdim0")
+            # println("initializing random MPS with linkdims $_maxdim0")
             return randomMPS(rng_vec, qubit_site, linkdims=_maxdim0)
         end
     elseif ancilla ==1
