@@ -9,15 +9,15 @@ using Random
 using ProgressMeter
 using JSON
 using Statistics
+include("run_CT_MPS_1-3.jl")
 
-L = 20
+L = 12
 ancilla = 0
 folded = true
 seed_vec = 123457
 xj = Set([1//3, 2//3])
 _maxdim = 2^(div(L,2))
 _maxdim0 = 50
-_eps = 0.0
 seed = 123457
 x0 = nothing
 rng = MersenneTwister(seed_vec)
@@ -36,7 +36,7 @@ p_ctrl = 0.4
 p_proj = 0.7
 n=0
 threshold = 1e-15
-
+_eps = 0.0
 ancilla = 0
 T_max = ancilla == 0 ? 2*(L^2) : div(L^2,2)
 ensemble_size = 50
@@ -44,7 +44,10 @@ ensemble_size = 50
 seed_vec_arr = [seed_vec + i for i in 1:ensemble_size]
 entropy_t_arr_list = [zeros(T_max) for _ in 1:ensemble_size]
 @showprogress "Ensemble trajectories: " for (idx, seed_vec_i) in enumerate(seed_vec_arr)
-    ct_t = CT_MPS(L=L,xj=xj,folded=folded,_maxdim=_maxdim,ancilla=ancilla,seed_vec=seed_vec_i,seed=seed,x0=x0,debug=false,passthrough=true);
+    # O, sv_arr, max_bond, _eps_out = main_interactive(L,p_ctrl,p_proj,ancilla,_maxdim,threshold, _eps,seed_vec_i;n=n,time_average=nothing)
+    # entropy_t_arr_list[idx] = sv_arr
+
+    ct_t = CT_MPS(L=L,xj=xj,folded=folded,_maxdim=_maxdim,ancilla=ancilla,seed_vec=seed_vec_i,seed=seed,x0=x0,_eps=_eps,debug=false,passthrough=true);
     j_local = 1
     for t in 1:T_max
         j_local = CT.random_control!(ct_t,j_local,p_ctrl,p_proj)
