@@ -27,9 +27,9 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        # heap_memory_usage = Base.gc_live_bytes() / 1024^2
-        # max_rss = Sys.maxrss() / 1024^2
-        # println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
+        heap_memory_usage = Base.gc_live_bytes() / 1024^2
+        max_rss = Sys.maxrss() / 1024^2
+        println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
     end
     O=CT.order_parameter(ct_f)
     max_bond= CT.max_bond_dim(ct_f.mps)

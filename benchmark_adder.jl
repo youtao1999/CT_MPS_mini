@@ -39,7 +39,7 @@ threshold = 1e-15
 _eps = 0.0
 ancilla = 0
 T_max = ancilla == 0 ? 2*(L^2) : div(L^2,2)
-ensemble_size = 50
+ensemble_size = 1000
 # Write a single string
 seed_vec_arr = [seed_vec + i for i in 1:ensemble_size]
 entropy_t_arr_list = [zeros(T_max) for _ in 1:ensemble_size]

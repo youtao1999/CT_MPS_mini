@@ -29,9 +29,19 @@ def plot_sv_arr(filename):
         plt.savefig(f'/scratch/ty296/plots/sv_arr_{filename}.png')
         # print(sv_arr.shape)
 
-def combine(combined_sv_filename, p_fixed_name, p_fixed_value):
-    all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", "*", "**"))
+def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None):
+    if eps_value is not None:
+        all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", f"*eps{eps_value}*", "**"), recursive=True)
+    else:
+        all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", 
+                                        "*", "**"), 
+                            recursive=True)
+    
+    # Filter out directories, keep only files
+    all_files = [f for f in all_files if os.path.isfile(f)]
     with h5py.File(combined_sv_filename, 'w') as f_target:
+        duplicate_count = 0
+        duplicate_list = []
         for filename in tqdm.tqdm(all_files):
             try:
                 with h5py.File(filename, 'r+') as f_source:
@@ -42,9 +52,8 @@ def combine(combined_sv_filename, p_fixed_name, p_fixed_value):
                     
                     # Check if name already exists, skip if duplicate
                     if dataset_name in f_target:
-                        print(f"DUPLICATE DATASET (skipping): seed={int(attrs['seed'])}")
-                        print(f"  Parameters: L={int(attrs['L'])}, p_ctrl={float(attrs['p_ctrl'])}, p_proj={float(attrs['p_proj'])}")
-                        print(f"  File: {filename}")
+                        duplicate_count += 1
+                        duplicate_list.append(filename)
                         continue
                     
                     dataset_target = f_target.create_dataset(dataset_name, data=np.transpose(dataset[:]))
@@ -53,8 +62,9 @@ def combine(combined_sv_filename, p_fixed_name, p_fixed_value):
                 print(f"CORRUPTED FILE (removing): {filename}")
                 print(f"  Error: {e}")
                 os.remove(filename)
-                print(f"  File deleted successfully")
                 continue
+    print(f"Duplicate count: {duplicate_count}")
+    print(f"Duplicate list: {duplicate_list}")
 
 def total_s0_dict(combined_sv_filename, threshold_val):
     """
@@ -92,7 +102,7 @@ def total_s0_dict(combined_sv_filename, threshold_val):
     return total_dict
 
 # read into the combined data file
-def distribution_dict(combined_sv_filename, L_target, threshold_val):
+def distribution_dict(combined_sv_filename, L_target, threshold_val, temporal_average=True):
     min_sv_dict = {}
     maxbond_dict = {}
     entropy_dict = {}
@@ -109,7 +119,12 @@ def distribution_dict(combined_sv_filename, L_target, threshold_val):
                         maxbond_dict[(L, p_ctrl, p_proj)].append(maxbond)
 
                 # Calculate entropy first to check for infinity before adding anything
-                entropy = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
+                if temporal_average:
+                    entropy = [von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val) for sv_arr in f[key][()]]
+                    entropy = np.mean(entropy)
+                else:
+                    entropy = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
+                    
                 if np.any(np.isinf(entropy)):
                     print(f"INFINITY VALUE (skipping): seed={seed}")
                     print(f"  Parameters: L={L}, p_ctrl={p_ctrl}, p_proj={p_proj}")
