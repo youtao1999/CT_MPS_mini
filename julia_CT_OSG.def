@@ -1,0 +1,22 @@
+Bootstrap: docker
+From: julia:1.9.3
+
+%files
+    CT/src/CT.jl /opt/julia/environments/CT/src
+    CT/Project.toml /opt/julia/environments/CT
+    CT/Manifest.toml /opt/julia/environments/CT
+
+%post
+    # Install any needed system packages first
+    apt-get update -y
+    apt-get install -y wget \
+            git \
+            cmake \
+            g++
+
+    # Install Julia packages
+    export JULIA_DEPOT_PATH="/opt/julia"
+    julia --project=/opt/julia/environments/CT -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+%environment
+    export JULIA_DEPOT_PATH=":/opt/julia"

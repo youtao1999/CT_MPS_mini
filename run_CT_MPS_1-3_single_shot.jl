@@ -2,110 +2,6 @@
 
 include("run_CT_MPS_1-3.jl")
 
-"""
-Store a single result directly to HDF5 file, optimized for large singular value arrays.
-Uses compression and efficient chunking for large arrays.
-Appends results to existing file or creates new file.
-"""
-function store_result_hdf5_single_shot(filename::String, singular_values::Union{Vector{Float64},Vector{Vector{Float64}}}, max_bond::Int, O::Float64,
-                          p_ctrl::Float64, p_proj::Float64, 
-                          args::Dict, seed::Int, eps::Float64)
-    
-    # # Delete file if it exists to ensure clean overwrite
-    if isfile(filename)
-        rm(filename)
-    end
-
-    # create filename
-    h5open(filename, "cw") do file
-        # Handle different data types for chunking
-        if isa(singular_values, Vector{Float64})
-            # 1D case
-            chunk_size = (min(1000, length(singular_values)),)
-            sv_data = singular_values
-        else
-            # Vector{Vector{Float64}} case - convert to 2D matrix
-            max_len = maximum(length.(singular_values))
-            sv_matrix = zeros(Float64, length(singular_values), max_len)
-            for (i, sv_vec) in enumerate(singular_values)
-                sv_matrix[i, 1:length(sv_vec)] = sv_vec
-            end
-            chunk_size = (min(1000, size(sv_matrix, 1)), min(1000, size(sv_matrix, 2)))
-            sv_data = sv_matrix
-        end
-        
-        sv_dataset = create_dataset(file, "singular_values", datatype(Float64), dataspace(sv_data),
-        chunk=chunk_size, 
-        shuffle=true, deflate=6)
-        write(sv_dataset, sv_data)
-        
-        # Add metadata as attributes to the compressed dataset
-        attributes(sv_dataset)["L"] = args["L"]
-        attributes(sv_dataset)["ancilla"] = args["ancilla"]
-        attributes(sv_dataset)["maxdim"] = args["maxdim"]
-        attributes(sv_dataset)["max_bond"] = max_bond
-        attributes(sv_dataset)["O"] = O
-        attributes(sv_dataset)["seed"] = seed
-        attributes(sv_dataset)["p_ctrl"] = p_ctrl
-        attributes(sv_dataset)["p_proj"] = p_proj
-        attributes(sv_dataset)["eps"] = eps
-    end
-end
-
-"""
-Read back exactly what was stored by store_result_hdf5_single_shot.
-Returns a tuple: (singular_values, metadata_dict)
-"""
-function read_hdf5_single_shot(filename::String)
-    if !isfile(filename)
-        error("File $filename does not exist")
-    end
-    
-    h5open(filename, "r") do file
-        # Read the singular values dataset
-        sv_dataset = file["singular_values"]
-        raw_data = read(sv_dataset)
-
-        # Convert back to appropriate format
-        if length(size(raw_data)) == 1
-            # Single time step case
-            singular_values = raw_data
-            println("Not time averaged. 1D singular values")
-        else
-            # Multiple time steps case - convert back to Vector{Vector{Float64}}
-            # Remove zero-padding by finding the last non-zero element in each row
-            singular_values = Vector{Vector{Float64}}()
-            for i in 1:size(raw_data, 1)
-                row = raw_data[i, :]
-                # Find last non-zero element (or use all if no zeros)
-                last_nonzero = findlast(x -> x != 0.0, row)
-                if last_nonzero === nothing
-                    # All zeros - this shouldn't happen but handle gracefully
-                    push!(singular_values, Float64[])
-                else
-                    push!(singular_values, row[1:last_nonzero])
-                end
-            end
-            println("Time averaged. Converted back to Vector{Vector{Float64}} format")
-        end
-        
-        # Read all attributes (metadata)
-        attrs = attributes(sv_dataset)
-        metadata = Dict{String, Any}()
-        
-        # Extract all the stored attributes
-        metadata["L"] = read(attrs["L"])
-        metadata["ancilla"] = read(attrs["ancilla"])
-        metadata["maxdim"] = read(attrs["maxdim"])
-        metadata["max_bond"] = read(attrs["max_bond"])
-        metadata["O"] = read(attrs["O"])
-        metadata["seed"] = read(attrs["seed"])
-        metadata["p_ctrl"] = read(attrs["p_ctrl"])
-        metadata["p_proj"] = read(attrs["p_proj"])
-        metadata["eps"] = read(attrs["eps"])
-        return singular_values, metadata
-    end
-end
 
 function parse_my_args()
     s = ArgParseSettings()
@@ -171,7 +67,7 @@ function main()
     
     # Choose storage format based on command line argument
     # Use HDF5 format for large singular value arrays
-    filename = "$(args["output_dir"])/$(args["seed"])_a$(args["ancilla"])_L$(args["L"])_$(p_vary_name)$(p_vary)_eps$(args["eps"]).h5"
+    filename = "$(args["output_dir"])/$(args["seed"])_a$(args["ancilla"])_L$(args["L"])_$(p_fixed_name)$(p_fixed_value)_$(p_vary_name)$(p_vary)_eps$(args["eps"]).h5"
     
     # Initialize parameters for this iteration
     p_ctrl = p_fixed_name == "p_ctrl" ? p_fixed_value : p_vary
@@ -188,3 +84,5 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
 end
+
+# apptainer exec --bind /ospool:/ospool julia_CT_OSG.sif julia --project=CT run_CT_MPS_1-3_single_shot.jl --p_vary 0.7 --p_fixed_name p_ctrl --p_fixed_value 0.4 --L 8 --seed 42 --ancilla 0 --threshold 1e-15 --eps 1e-15 --output_dir "/ospool/ap20/data/ty296/test"
