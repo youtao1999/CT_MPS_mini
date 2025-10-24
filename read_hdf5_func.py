@@ -29,11 +29,11 @@ def plot_sv_arr(filename):
         plt.savefig(f'/scratch/ty296/plots/sv_arr_{filename}.png')
         # print(sv_arr.shape)
 
-def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None):
+def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None, hdf5_data_path="/scratch/ty296/hdf5_data"):
     if eps_value is not None:
-        all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", f"*eps{eps_value}*", "**"), recursive=True)
+        all_files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", f"*eps{eps_value}*", "**"), recursive=True)
     else:
-        all_files = glob.glob(os.path.join(f"/scratch/ty296/hdf5_data/{p_fixed_name}{p_fixed_value}", 
+        all_files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", 
                                         "*", "**"), 
                             recursive=True)
     
