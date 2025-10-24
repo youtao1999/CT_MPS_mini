@@ -77,28 +77,26 @@ def total_s0_dict(combined_sv_filename, threshold_val):
     with h5py.File(combined_sv_filename, 'r') as f:
         for key in list(f.keys()):
             L, p_ctrl, p_proj, seed = parse_name(key)
-            if f[key][()].ndim == 1:
-                s = von_neumann_entropy_sv(f[key][()], n=0, positivedefinite=False, threshold=threshold_val)
-            else:
-                s = []
-                for sv_arr in f[key][()]:
-                    s.append(von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val))
-                s = np.array(s)
-            
+            s = []
+            for sv_arr in f[key][()].T:
+                # print(sv_arr.shape)
+                s0 = von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val)
+                s.append(s0)
+            s = np.array(s)
+            # print(np.shape(s))
+        
             # Check if s contains any infinity values
             if np.any(np.isinf(s)):
                 print(f"INFINITY VALUE (skipping): seed={seed}")
                 print(f"  Parameters: L={L}, p_ctrl={p_ctrl}, p_proj={p_proj}")
                 continue
-            
-            if (L, p_ctrl, p_proj) not in total_dict:
-                total_dict[(L, p_ctrl, p_proj)] = [s]
-            else:
-                total_dict[(L, p_ctrl, p_proj)].append(s)
-    
-    for key, item in total_dict.items():
-        total_dict[key] = np.array(item).flatten()
 
+            s = np.array(s).flatten()
+
+            if (L, p_ctrl, p_proj) not in total_dict:
+                total_dict[(L, p_ctrl, p_proj)] = s
+            else:
+                total_dict[(L, p_ctrl, p_proj)] = np.concatenate((total_dict[(L, p_ctrl, p_proj)], s))
     return total_dict
 
 # read into the combined data file

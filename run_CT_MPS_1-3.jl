@@ -44,9 +44,10 @@ function store_result_hdf5_single_shot(filename::String, singular_values::Union{
         else
             # Vector{Vector{Float64}} case - convert to 2D matrix
             max_len = maximum(length.(singular_values))
-            sv_matrix = zeros(Float64, max_len, length(singular_values))
+            # the first dimension is the number of time steps, the second dimension is the number of singular values
+            sv_matrix = zeros(Float64, length(singular_values), max_len)
             for (i, sv_vec) in enumerate(singular_values)
-                sv_matrix[1:length(sv_vec), i] = sv_vec
+                sv_matrix[i, 1:length(sv_vec)] = sv_vec
             end
             chunk_size = (min(1000, size(sv_matrix, 1)), min(1000, size(sv_matrix, 2)))
             sv_data = sv_matrix
