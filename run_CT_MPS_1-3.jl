@@ -134,6 +134,8 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
+        # println("norm: ", norm(ct_f.mps))
+        # @show maxlinkdim(ct_f.mps)
         heap_memory_usage = Base.gc_live_bytes() / 1024^2
         max_rss = Sys.maxrss() / 1024^2
         println("$(idx) heap memory usage: $(heap_memory_usage) MB, Max RSS: $(max_rss) MB")
@@ -146,6 +148,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             sv_arr_list = Vector{Vector{Float64}}()
             for _ in 1:time_average
                 sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
+                # println(sum(abs2.(sv_arr)))
                 push!(sv_arr_list, sv_arr)
                 # println(size(sv_arr))
                 i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
