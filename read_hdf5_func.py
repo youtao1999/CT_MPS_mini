@@ -31,7 +31,16 @@ def plot_sv_arr(filename):
 
 def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None, hdf5_data_path="/scratch/ty296/hdf5_data"):
     if eps_value is not None:
-        all_files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", f"*eps{eps_value}*", "**"), recursive=True)
+        # Handle both single value and list of eps values
+        if isinstance(eps_value, list):
+            all_files = []
+            for eps in eps_value:
+                files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", f"*eps{eps}*", "**"), recursive=True)
+                all_files.extend(files)
+            # Remove duplicates while preserving order
+            all_files = list(dict.fromkeys(all_files))
+        else:
+            all_files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", f"*eps{eps_value}*", "**"), recursive=True)
     else:
         all_files = glob.glob(os.path.join(f"{hdf5_data_path}/{p_fixed_name}{p_fixed_value}", 
                                         "*", "**"), 
@@ -359,13 +368,17 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, t
     Returns:
     - Entropy value
     """
+    # print("sv_arr before thresholding", sv_arr)
+    print(np.linalg.norm(sv_arr))
     mask = sv_arr > threshold
     sv_arr = sv_arr[mask]
+    # print("sv_arr after thresholding", sv_arr)
     if positivedefinite:
         p = np.maximum(sv_arr, threshold)
         p = sv_arr
     else:
         p = np.maximum(sv_arr, threshold) ** 2
+        # print(len(sv_arr), len(p))
         p = sv_arr ** 2
 
     if n == 1:
@@ -380,22 +393,22 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, t
 
     return SvN
 
-def calculate_mean_and_error(sv_values: List[float]) -> Tuple[float, float]:
+def calculate_mean_and_error(arr: List[float]) -> Tuple[float, float]:
     """Calculate mean and standard error of the mean."""
-    sv_array = np.array(sv_values)
-    mean = np.mean(sv_array)
-    sem = np.std(sv_array, ddof=1) / np.sqrt(len(sv_array))
+    array = np.array(arr)
+    mean = np.mean(array)
+    sem = np.std(array, ddof=1) / np.sqrt(len(array))
     return mean, sem
 
-def calculate_variance_and_error(sv_values: List[float]) -> Tuple[float, float]:
+def calculate_variance_and_error(arr: List[float]) -> Tuple[float, float]:
     """Calculate variance and standard error of variance."""
-    sv_array = np.array(sv_values)
-    mean = np.mean(sv_array)
-    var = np.var(sv_array, ddof=1)
+    array = np.array(arr)
+    mean = np.mean(array)
+    var = np.var(array, ddof=1)
 
-    deviations = sv_array - mean
+    deviations = array - mean
     fourth_moment = np.mean(deviations**4)
-    se_var = (1/len(sv_array)) * (fourth_moment - (len(sv_array)-3)/(len(sv_array)-1) * var**2)
+    se_var = (1/len(array)) * (fourth_moment - (len(array)-3)/(len(array)-1) * var**2)
     return var, se_var
 
 
