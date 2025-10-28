@@ -27,10 +27,10 @@ mutable struct CT_MPS
     xj::Set
     ancilla::Int
     folded::Bool
-    rng::Random.AbstractRNG
-    rng_vec::Random.AbstractRNG
-    rng_C::Random.AbstractRNG
-    rng_m::Random.AbstractRNG
+    rng::MersenneTwister
+    rng_vec::MersenneTwister
+    rng_C::MersenneTwister
+    rng_m::MersenneTwister
     qubit_site::Vector{Index{Int64}}
     phy_ram::Vector{Int}
     ram_phy::Vector{Int}
@@ -66,7 +66,7 @@ function CT_MPS(
     _maxdim::Int=2^10,
     debug::Bool=false,
     simplified_U::Bool=false,
-    builtin::Bool=false,
+    builtin::Bool=true,
     passthrough::Bool=false,
     )
     rng = MersenneTwister(seed)
@@ -115,7 +115,7 @@ function _initialize_basis(L::Int,ancilla::Int,folded::Bool)
     return qubit_site, ram_phy, phy_ram, phy_list
 end
 
-function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational{BigInt},Nothing},folded::Bool,qubit_site::Vector{Index{Int64}},ram_phy::Vector{Int},phy_ram::Vector{Int},phy_list::Vector{Int},rng_vec::Random.AbstractRNG,_eps::Float64,_maxdim0::Int)
+function _initialize_vector(L::Int,ancilla::Int,x0::Union{Rational{Int},Rational{BigInt},Nothing},folded::Bool,qubit_site::Vector{Index{Int64}},ram_phy::Vector{Int},phy_ram::Vector{Int},phy_list::Vector{Int},rng_vec::MersenneTwister,_eps::Float64,_maxdim0::Int)
     if ancilla == 0
         if x0 !== nothing
             vec_int = dec2bin(x0, L)
@@ -159,7 +159,7 @@ index should be ram index
 """
 
 function find_matching_site_indices(tensor1, tensor2)
-    matches = []
+    matches = Tuple{Index, Index}[]
     
     for ind1 in inds(tensor1)
         if hastags(ind1, "Site")  # Check if it's a Site index
@@ -176,39 +176,75 @@ function find_matching_site_indices(tensor1, tensor2)
     return matches
 end
 
-function apply_op!(mps::MPS, op::ITensor, eps::Float64, maxdim::Int)
-    i_list = [parse(Int, replace(string(tags(inds(op)[i])[length(tags(inds(op)[i]))]), "n=" => "")) for i in 1:div(length(op.tensor.inds), 2)]
+"""
+apply the operator `op` to `mps`, the `op` should have indices of (i,j,k.. i',j',k')
+the orthogonalization center is at i
+index should be ram index
+"""
+function apply_op!(mps::MPS, op::ITensor, cutoff::Float64, maxdim::Int)
+    # Extract site indices with explicit type annotation
+    n_sites::Int = div(length(op.tensor.inds), 2)
+    i_list::Vector{Int} = Vector{Int}(undef, n_sites)
+    
+    @inbounds for i::Int in 1:n_sites
+        tag_str::String = string(tags(inds(op)[i])[length(tags(inds(op)[i]))])
+        i_list[i] = parse(Int, replace(tag_str, "n=" => ""))
+    end
     sort!(i_list)
+    
+    # Orthogonalize and get first tensor
     orthogonalize!(mps, i_list[1])
-    mps_ij = mps[i_list[1]]
-    for idx in i_list[1]+1:i_list[end]
-        mps_ij *= mps[idx]
+    mps_ij::ITensor = mps[i_list[1]]
+    
+    # Contract with remaining tensors in range
+    @inbounds for idx::Int in (i_list[1]+1):i_list[end]
+        mps_ij = mps_ij * mps[idx]
     end
-
-    matches = find_matching_site_indices(op, mps_ij)
-    for match in matches
-        if plev(match[1]) == 0
-            op = replaceinds(op, [match[1]], [match[2]])
-        else
-            op = replaceinds(op, [match[1]], [prime(match[2])])
-        end
-    end
-    mps_ij *= op  
+    
+    # Apply operator
+    mps_ij = mps_ij * op
     noprime!(mps_ij)
+    
+    # Handle single-site case
     if length(i_list) == 1
         mps[i_list[1]] = mps_ij
-    else
-        lefttags= (i_list[1]==1) ? nothing : tags(linkind(mps,i_list[1]-1))
-        for idx in i_list[1]:i_list[end]-1
-            inds1 = (idx ==1) ? [siteind(mps,1)] : [findindex(mps[idx-1],lefttags), findindex(mps[idx],"Site")]
-            lefttags=tags(linkind(mps,idx))
-            U, S, V = svd(mps_ij, inds1, cutoff=eps,lefttags=lefttags,maxdim=maxdim)
-            mps[idx] = U
-            mps_ij = S * V
-        end
-        mps[i_list[end]] = mps_ij
+        return nothing
     end
-    return
+    
+    # Multi-site case: perform SVD decomposition
+    lefttags::Union{Nothing,ITensors.TagSet} = (i_list[1] == 1) ? nothing : tags(linkind(mps, i_list[1]-1))
+    
+    @inbounds for idx::Int in i_list[1]:(i_list[end]-1)
+        # Determine indices for SVD - explicitly typed
+        local inds1::Vector{Index{Int64}}
+        if idx == 1
+            site_idx = siteind(mps, 1)
+            inds1 = [site_idx]
+        else
+            link_idx = findindex(mps[idx-1], lefttags)
+            site_idx = findindex(mps[idx], "Site")
+            # Handle potential nothing returns
+            if link_idx === nothing || site_idx === nothing
+                error("Could not find required indices")
+            end
+            inds1 = [link_idx, site_idx]
+        end
+        
+        # Update lefttags for next iteration
+        lefttags = tags(linkind(mps, idx))
+        
+        # Perform SVD
+        result = svd(mps_ij, inds1; cutoff=cutoff, lefttags=lefttags, maxdim=maxdim)
+        if result === nothing
+            error("SVD returned nothing")
+        end
+        U::ITensor, S::ITensor, V::ITensor = result
+        mps[idx] = U
+        mps_ij = S * V
+    end
+    
+    mps[i_list[end]] = mps_ij
+    return nothing
 end
 
 """ apply Bernoulli_map to physical site i
@@ -219,7 +255,7 @@ end
 
 """ apply scrambler (Haar random unitary) to site (i,i+1) [physical index]
 """
-function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; theta=nothing)
+function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, MersenneTwister}; theta=nothing)
     # println("theta = ", theta)
     if ct.simplified_U
         # print("simplified U!!")
@@ -239,8 +275,6 @@ function S!(ct::CT_MPS, i::Int, rng::Union{Nothing, Int, Random.AbstractRNG}; th
         ram_idx = ct.phy_ram[[ct.phy_list[i], ct.phy_list[(i)%(ct.L)+1]]]
         U_4_tensor = ITensor(U_4, ct.qubit_site[ram_idx[1]], ct.qubit_site[ram_idx[2]], ct.qubit_site[ram_idx[1]]', ct.qubit_site[ram_idx[2]]')
         # U_4_tensor = ITensor(U_4, ct_f.qubit_site[ram_idx[1]], ct_f.qubit_site[ram_idx[2]], ct_f.qubit_site[ram_idx[1]]', ct_f.qubit_site[ram_idx[2]]')
-
-        
         if ct.builtin
             ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
         else
@@ -281,7 +315,8 @@ end
 function control_map(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     R!(ct, n, i)
     if ct.xj == Set([1 // 3, 2 // 3])
-        ct.mps=apply(ct.adder[i[1]],ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
+        adder_mpo::MPO = ct.adder[i[1]]::MPO
+        ct.mps=apply(adder_mpo,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
         normalize!(ct.mps)
         truncate!(ct.mps, cutoff=ct._eps,maxdim=ct._maxdim)
     end
@@ -306,13 +341,13 @@ function R!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
 end
 """generate projector for physical site (will convert to RAM site)
 """
-function projector(ct::CT_MPS,n::Vector{Int}, i::Vector{Int})
+function projector(ct::CT_MPS,n::Vector{Int}, i::Vector{Int})::ITensor
     if ct.debug
         println("Get projector $(n) at Phy $(i)")
     end
-    proj_op=emptyITensor(ct.qubit_site[ct.phy_ram[ct.phy_list[i]]],ct.qubit_site[ct.phy_ram[ct.phy_list[i]]]')
+    proj_op=emptyITensor(ComplexF64, ct.qubit_site[ct.phy_ram[ct.phy_list[i]]],ct.qubit_site[ct.phy_ram[ct.phy_list[i]]]')
     idx=n.+1
-    proj_op[ idx...,idx... ]=1+0im
+    proj_op[ idx...,idx... ]=1.0+0.0im
     return proj_op
 end
 """ perform projection for physical site
@@ -323,7 +358,9 @@ function P!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
         println("Projecting $(n) at Phy $(i)")
     end
     proj_op= projector(ct,n, i)
-    apply_op!(ct.mps, proj_op, ct._eps, ct._maxdim)
+    # ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
+    ct.mps=apply(proj_op,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
+    # apply_op!(ct.mps, proj_op, ct._eps, ct._maxdim)
     if ct.debug
         println("norm is $(norm(ct.mps))")
     end
@@ -401,7 +438,7 @@ end
 """randomly apply control or Bernoulli map to physical site i (the left leg of op)
 """
 function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
-    op_l=[]
+    op_l = Dict{String,Any}[]
     # sv_check_dict = Dict{String, Any}()
     p_0=-1.  # -1 for not applicable because of Bernoulli map
     if rand(ct.rng_C) < p_ctrl
@@ -461,7 +498,7 @@ function random_control!(ct::CT_MPS, i::Int, p_ctrl::Float64, p_proj::Float64)
     return i #sv_check_dict
 end
 
-function update_history(ct::CT_MPS,op::Vector{Any},p_0::Float64)
+function update_history(ct::CT_MPS,op::Vector{Dict{String, Any}},p_0::Float64)
     if ct.store_vec
         push!(ct.vec_history,copy(ct.mps)) 
     end
@@ -537,15 +574,17 @@ end
 
 """ compute the Born probability through the inner product at physical site list i (will convert to RAM site internally)
 """
-function inner_prob(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
+function inner_prob(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})::Float64
     @assert length(n) == length(i) "length of n $(n) is not equal to length of i $(i)"
-    ram_idx=ct.phy_ram[ct.phy_list[i]]
+    ram_idx::Vector{Int} = ct.phy_ram[ct.phy_list[i]]
     if length(i)==1
         if ct.debug
             println("Get projector for inner_prob $(n) at Phy $(i) at RAM $(ram_idx)")
         end
-        proj_op= array(projector(ct,n, i))
-        return only(expect(ct.mps, proj_op,sites=ram_idx))
+        proj_tensor::ITensor = projector(ct,n, i)
+        proj_op::Matrix{ComplexF64} = array(proj_tensor)
+        expect_result::Vector{Float64} = expect(ct.mps, proj_op, sites=ram_idx)
+        return only(expect_result)
     else
         # proj_op= projector(ct,n, i,tensor=false)
         # os=OpSum()
@@ -644,7 +683,7 @@ end
 
 """create Haar random unitary
 """
-function U(n::Int, rng::Random.AbstractRNG=MersenneTwister(nothing))
+function U(n::Int, rng::MersenneTwister=MersenneTwister(nothing))
     z = randn(rng, n, n) + randn(rng, n, n) * im
     Q, R = qr(z)
     r_diag = diag(R)
@@ -679,7 +718,7 @@ If `CZ` is true, applied a CZ gate, otherwise, it is skipped.
 Here, 12 θ's are independently chosen as a random number in [0,2pi), and Rx and Rz are single qubit rotation gates along the x and z axes, respectively.
 For simplicity, we denote θ as θ[1], θ[2], ..., θ[6] on the top qubit, and θ[7], θ[8], ..., θ[12] on the bottom qubit. 
 """
-function U_simp(CZ::Bool, rng::Union{Nothing, Int, Random.AbstractRNG}, 
+function U_simp(CZ::Bool, rng::Union{Nothing, Int, MersenneTwister}, 
                 theta::Vector{Any}=nothing)
     if theta === nothing
         theta = rand(rng, 12) * 2 * pi
@@ -714,7 +753,7 @@ three Euler angles decomposition. [The global phase does not matter here]
           |
 ---U_21---CZ---U_22
 """
-function U2(CZ::Bool,rng::Random.AbstractRNG=MersenneTwister(nothing))
+function U2(CZ::Bool,rng::MersenneTwister=MersenneTwister(nothing))
     U_11=U(2,rng)
     U_12=U(2,rng)
     U_21=U(2,rng)

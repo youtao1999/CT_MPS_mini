@@ -126,8 +126,8 @@ function read_hdf5_single_shot(filename::String)
 end
 
 
-function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64, eps::Float64,seed::Int;n::Int=0,time_average::Union{Int,Nothing}=nothing)
-    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1 // 3, 2 // 3]),_maxdim=maxdim, builtin=false,_eps=eps, passthrough=true)
+function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,threshold::Float64, eps::Float64,seed::Int;n::Int=0,time_average::Union{Int,Nothing}=nothing, builtin::Bool=true)
+    ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1 // 3, 2 // 3]),_maxdim=maxdim, builtin=builtin,_eps=eps, passthrough=true)
     # println("ct_f memory usage: ", Base.summarysize(ct_f) / 2^20, " MB")
     i=1
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
@@ -147,9 +147,8 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             sv_arr_list = Vector{Vector{Float64}}()
             for _ in 1:time_average
                 sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
-                println(sum(abs2.(sv_arr)))
+                # println(sum(abs2.(sv_arr)))
                 push!(sv_arr_list, sv_arr)
-                # println(size(sv_arr))
                 i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
             end
             # implement time averaging: store the sv_arrs for multiple time steps
