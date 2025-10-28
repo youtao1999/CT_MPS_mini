@@ -1,7 +1,7 @@
 include("run_CT_MPS_1-3.jl")
 using Profile, PProf
 
-L = 20
+L = 16
 seed = 42
 ancilla = 0
 maxdim = 2^(div(L,2))

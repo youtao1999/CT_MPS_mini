@@ -359,8 +359,9 @@ function P!(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     end
     proj_op= projector(ct,n, i)
     # ct.mps=apply(U_4_tensor,ct.mps,[ram_idx[1], ram_idx[2]];cutoff=ct._eps,maxdim=ct._maxdim)
-    ct.mps=apply(proj_op,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
-    # apply_op!(ct.mps, proj_op, ct._eps, ct._maxdim)
+    # ct.mps=apply(proj_op,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
+    
+    apply_op!(ct.mps, proj_op, ct._eps, ct._maxdim)
     if ct.debug
         println("norm is $(norm(ct.mps))")
     end
