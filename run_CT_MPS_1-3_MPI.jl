@@ -95,7 +95,7 @@ function main()
     # store_result_hdf5(filename, O, entropy_data, max_bond, 
     #             p_ctrl, p_proj, seed)
 
-    @time O, sv_array, max_bond, eps = main_interactive(L, p_ctrl, p_proj, ancilla, maxdim,threshold,eps,seed;time_average=10)
+    @time O, sv_array, max_bond, eps = main_interactive(L, p_ctrl, p_proj, ancilla, maxdim,threshold,eps,seed;time_average=10, builtin=false)
     # Store result directly to HDF5
     store_result_hdf5_single_shot(filename, sv_array, max_bond, O, p_ctrl, p_proj, args, seed, eps)
     println("Worker $rank stored result (seed=$seed, p=$p, eps=$eps) to HDF5")

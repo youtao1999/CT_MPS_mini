@@ -28,7 +28,7 @@ module load gcc/14.2.0/openmpi/5.0.5/hdf5/1.14.5-cermak # HDF5 module compiled w
 # Run the Julia MPI program with specified number of processes
 # Using srun for SLURM native process management
 # Temporarily removing sysimage to test MPI configuration
-mpirun -n $SLURM_NTASKS julia --heap-size-hint=32G --project=/scratch/ty296/CT_MPS_mini/CT \
+mpirun -n $SLURM_NTASKS julia --heap-size-hint=$HEAP_SIZE_HINT --project=/scratch/ty296/CT_MPS_mini/CT \
     /scratch/ty296/CT_MPS_mini/run_CT_MPS_1-3_MPI.jl \
     --L $L \
     --job_file $JOB_FILE \
