@@ -54,8 +54,10 @@ def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None, h
         for filename in tqdm.tqdm(all_files):
             try:
                 with h5py.File(filename, 'r+') as f_source:
-                    dataset = f_source['singular_values']
-                    attrs = dataset.attrs
+                    dataset = f_source['singular_values'][:]
+                    if dataset.shape[1] != 10:
+                        dataset = np.transpose(dataset)
+                    attrs = f_source['singular_values'].attrs
                     # Create dataset name
                     dataset_name = f'sv_arr_L{int(attrs["L"])}_pctrl{float(attrs["p_ctrl"])}_pproj{float(attrs["p_proj"])}_seed{int(attrs["seed"])}'
                     
@@ -65,7 +67,7 @@ def combine(combined_sv_filename, p_fixed_name, p_fixed_value, eps_value=None, h
                         duplicate_list.append(filename)
                         continue
                     
-                    dataset_target = f_target.create_dataset(dataset_name, data=np.transpose(dataset[:]))
+                    dataset_target = f_target.create_dataset(dataset_name, data=dataset)
                     dataset_target.attrs.update(attrs)
             except OSError as e:
                 print(f"CORRUPTED FILE (removing): {filename}")
@@ -87,8 +89,8 @@ def total_s0_dict(combined_sv_filename, threshold_val):
         for key in list(f.keys()):
             L, p_ctrl, p_proj, seed = parse_name(key)
             s = []
-            for sv_arr in f[key][()].T:
-                # print(sv_arr.shape)
+            for sv_arr in f[key][()]:
+                # print(np.linalg.norm(sv_arr))
                 s0 = von_neumann_entropy_sv(sv_arr, n=0, positivedefinite=False, threshold=threshold_val)
                 s.append(s0)
             s = np.array(s)
@@ -369,7 +371,7 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, t
     - Entropy value
     """
     # print("sv_arr before thresholding", sv_arr)
-    print(np.linalg.norm(sv_arr))
+    # print(np.linalg.norm(sv_arr))
     mask = sv_arr > threshold
     sv_arr = sv_arr[mask]
     # print("sv_arr after thresholding", sv_arr)
@@ -377,8 +379,6 @@ def von_neumann_entropy_sv(sv_arr: np.ndarray, n: int, positivedefinite: bool, t
         p = np.maximum(sv_arr, threshold)
         p = sv_arr
     else:
-        p = np.maximum(sv_arr, threshold) ** 2
-        # print(len(sv_arr), len(p))
         p = sv_arr ** 2
 
     if n == 1:

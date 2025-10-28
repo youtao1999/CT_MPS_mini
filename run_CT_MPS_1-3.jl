@@ -61,7 +61,6 @@ function store_result_hdf5_single_shot(filename::String, singular_values::Union{
         # Add metadata as attributes to the compressed dataset
         attributes(sv_dataset)["L"] = args["L"]
         attributes(sv_dataset)["ancilla"] = args["ancilla"]
-        attributes(sv_dataset)["maxdim"] = args["maxdim"]
         attributes(sv_dataset)["max_bond"] = max_bond
         attributes(sv_dataset)["O"] = O
         attributes(sv_dataset)["seed"] = seed
@@ -148,7 +147,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
             sv_arr_list = Vector{Vector{Float64}}()
             for _ in 1:time_average
                 sv_arr=CT.von_Neumann_entropy(ct_f.mps,div(ct_f.L,2),threshold, eps;positivedefinite=false,n=n,sv=true)
-                # println(sum(abs2.(sv_arr)))
+                println(sum(abs2.(sv_arr)))
                 push!(sv_arr_list, sv_arr)
                 # println(size(sv_arr))
                 i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
@@ -236,7 +235,7 @@ function main()
     filename = "$(args["output_dir"])/L$(args["L"])_p_ctrl$(args["p_ctrl"])_p_proj$(args["p_proj"])_ancilla$(args["ancilla"])_maxbond$(args["maxbond"])_threshold$(args["threshold"])_eps$(args["eps"])_seed$(args["seed"]).h5"
     
     # Get results as tuple with singular values
-    @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], args["p_ctrl"], args["p_proj"], args["ancilla"],args["maxbond"],args["threshold"],args["eps"],args["seed"];)
+    @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], args["p_ctrl"], args["p_proj"], args["ancilla"],args["maxbond"],args["threshold"],args["eps"],args["seed"]; time_average=10)
     
     # Store result directly to HDF5
     store_result_hdf5_single_shot(filename, entropy_data, max_bond, O, args["p_ctrl"], args["p_proj"], args, args["seed"], args["eps"])
@@ -249,4 +248,4 @@ end
 
 
 
-# julia --project=CT run_CT_MPS_1-3.jl --p_range "0.2" --p_fixed_name "p_ctrl" --p_fixed_value 0.0 --L 8 --threshold 1e-15 --n_chunk_realizations 1 --random --ancilla 0 --maxdim 64 --output_dir "/scratch/ty296/debug_sv" --store_sv
+# srun --time=06:00:00 --mem=50G -p main julia --project=CT run_CT_MPS_1-3.jl --L 8 --p_ctrl 0.0 --p_proj 0.2 --ancilla 0 --maxbond 64 --threshold 1e-15 --eps 1e-15 --seed 1234 --output_dir "/scratch/ty296/test_output"
