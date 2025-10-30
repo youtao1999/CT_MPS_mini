@@ -14,12 +14,6 @@ using Printf
 using ArgParse
 using Serialization
 
-function sv_check(mps::MPS, eps::Float64, L::Int)
-    mps_ = orthogonalize(copy(mps), div(L,2))
-    _, S = svd(mps_[div(L,2)], (linkind(mps_, div(L,2)),); cutoff=eps)
-    return array(diag(S))
-end
-
 """
 Store a single result directly to HDF5 file, optimized for large singular value arrays.
 Uses compression and efficient chunking for large arrays.
@@ -133,7 +127,7 @@ function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,ma
     T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
     for idx in 1:T_max
         i =CT.random_control!(ct_f,i,p_ctrl,p_proj)
-        # println("norm: ", norm(ct_f.mps))
+        @show Base.summarysize(ct_f) / 2^20, " MB"
         # @show maxlinkdim(ct_f.mps)
         heap_memory_usage = Base.gc_live_bytes() / 1024^2
         max_rss = Sys.maxrss() / 1024^2
@@ -234,7 +228,7 @@ function main()
     filename = "$(args["output_dir"])/L$(args["L"])_p_ctrl$(args["p_ctrl"])_p_proj$(args["p_proj"])_ancilla$(args["ancilla"])_maxbond$(args["maxbond"])_threshold$(args["threshold"])_eps$(args["eps"])_seed$(args["seed"]).h5"
     
     # Get results as tuple with singular values
-    @time O, entropy_data, max_bond, _eps = main_interactive(args["L"], args["p_ctrl"], args["p_proj"], args["ancilla"],args["maxbond"],args["threshold"],args["eps"],args["seed"]; time_average=10)
+    O, entropy_data, max_bond, _eps = main_interactive(args["L"], args["p_ctrl"], args["p_proj"], args["ancilla"],args["maxbond"],args["threshold"],args["eps"],args["seed"]; time_average=10)
     
     # Store result directly to HDF5
     store_result_hdf5_single_shot(filename, entropy_data, max_bond, O, args["p_ctrl"], args["p_proj"], args, args["seed"], args["eps"])

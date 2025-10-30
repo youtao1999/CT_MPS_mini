@@ -316,7 +316,7 @@ function control_map(ct::CT_MPS, n::Vector{Int}, i::Vector{Int})
     R!(ct, n, i)
     if ct.xj == Set([1 // 3, 2 // 3])
         adder_mpo::MPO = ct.adder[i[1]]::MPO
-        ct.mps=apply(adder_mpo,ct.mps;cutoff=ct._eps,maxdim=ct._maxdim)
+        @allocated ct.mps=apply(adder_mpo,ct.mps,[i[1]];cutoff=ct._eps,maxdim=ct._maxdim)
         normalize!(ct.mps)
         truncate!(ct.mps, cutoff=ct._eps,maxdim=ct._maxdim)
     end

@@ -89,13 +89,7 @@ function main()
     filename = "$(output_dir)/$(seed)_a$(ancilla)_L$(L)_$(p_vary_name)$(p)_eps$(eps).h5"
     println("Worker $rank will write to file: $filename")
     
-    # # Get results as tuple with singular values
-    # @time O, entropy_data, max_bond = main_interactive(args["L"], p_ctrl, p_proj, args["ancilla"],args["maxdim"],args["threshold"],seed)
-    # # Store result directly to HDF5
-    # store_result_hdf5(filename, O, entropy_data, max_bond, 
-    #             p_ctrl, p_proj, seed)
-
-    @time O, sv_array, max_bond, eps = main_interactive(L, p_ctrl, p_proj, ancilla, maxdim,threshold,eps,seed;time_average=10, builtin=false)
+    O, sv_array, max_bond, eps = main_interactive(L, p_ctrl, p_proj, ancilla, maxdim,threshold,eps,seed;time_average=10, builtin=false)
     # Store result directly to HDF5
     store_result_hdf5_single_shot(filename, sv_array, max_bond, O, p_ctrl, p_proj, args, seed, eps)
     println("Worker $rank stored result (seed=$seed, p=$p, eps=$eps) to HDF5")

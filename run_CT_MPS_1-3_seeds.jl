@@ -16,7 +16,7 @@ using Serialization
 
 function main_interactive(L::Int,p_ctrl::Float64,p_proj::Float64,ancilla::Int,maxdim::Int,cutoff::Float64,seed::Int;sv::Bool=false,n::Int=0)
     ct_f=CT.CT_MPS(L=L,seed=seed,folded=true,store_op=false,store_vec=false,ancilla=ancilla,debug=false,xj=Set([1//3,2//3]),_maxdim=maxdim,_cutoff=cutoff, _maxdim0=maxdim)
-    println(CT.sv_check(ct_f.mps, cutoff, L))
+    # println(CT.sv_check(ct_f.mps, cutoff, L))
     i=1
     T_max = ct_f.L
     # T_max = ancilla ==0 ? 2*(ct_f.L^2) : div(ct_f.L^2,2)
